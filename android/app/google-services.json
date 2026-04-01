@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "55684754053",
+    "project_id": "fitforge-app-e7495",
+    "storage_bucket": "fitforge-app-e7495.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:55684754053:android:9f926e060dd5f29e4fd7ec",
+        "android_client_info": {
+          "package_name": "com.fitforge.fitforge"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "55684754053-65cujj4bgt9gh03reec2toepfmboo5j5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjHxEO0N8ejHpAvr2oyNsokBEaj5UtWdw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "55684754053-65cujj4bgt9gh03reec2toepfmboo5j5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
