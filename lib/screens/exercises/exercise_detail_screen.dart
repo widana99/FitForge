@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../config/theme/app_colors.dart';
 import '../../config/theme/app_text_styles.dart';
 import '../../config/theme/app_dimensions.dart';
+import '../../services/workout_presets.dart';
 
 class ExerciseDetailScreen extends StatelessWidget {
   const ExerciseDetailScreen({super.key});
@@ -9,6 +10,19 @@ class ExerciseDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // Retrieve passed exerciseId, fallback to 'pushup' if not provided
+    final String exerciseId = ModalRoute.of(context)?.settings.arguments as String? ?? 'pushup';
+    
+    // Retrieve data from DB, fallback to 'default' if not found
+    final Map<String, dynamic> exerciseData = WorkoutPresets.exerciseDB[exerciseId] ?? WorkoutPresets.exerciseDB['default']!;
+    
+    final String name = exerciseData['name'];
+    final String focus = exerciseData['focus'];
+    final List<String> tags = exerciseData['tags'];
+    final String desc = exerciseData['desc'];
+    final List<String> tips = exerciseData['tips'];
+
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -59,7 +73,7 @@ class ExerciseDetailScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Push Up',
+                    name,
                     style: AppTextStyles.h2(
                       color: isDark
                           ? AppColors.textPrimaryDark
@@ -67,12 +81,10 @@ class ExerciseDetailScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppDimensions.md),
-                  Row(
-                    children: [
-                      _tag('Dada', AppColors.primary),
-                      const SizedBox(width: 8),
-                      _tag('Pemula', AppColors.accent),
-                    ],
+                  Wrap(
+                    spacing: 8.0,
+                    runSpacing: 8.0,
+                    children: tags.map((t) => _tag(t, AppColors.primary)).toList(),
                   ),
                   const SizedBox(height: AppDimensions.xxl),
                   Container(
@@ -86,9 +98,7 @@ class ExerciseDetailScreen extends StatelessWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _info('3', 'Set', isDark),
-                        _info('12', 'Rep', isDark),
-                        _info('30s', 'Istirahat', isDark),
+                        _info('Target', focus, isDark),
                       ],
                     ),
                   ),
@@ -103,7 +113,7 @@ class ExerciseDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: AppDimensions.md),
                   Text(
-                    'Push up melatih otot dada, bahu, dan trisep. Posisi telungkup, kedua tangan di samping dada, dorong tubuh ke atas. Pastikan tubuh lurus dari kepala hingga tumit.',
+                    desc,
                     style: AppTextStyles.bodyMedium(
                       color: isDark
                           ? AppColors.textSecondaryDark
@@ -112,7 +122,7 @@ class ExerciseDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: AppDimensions.xxl),
                   Text(
-                    'Tips',
+                    'Panduan & Tips',
                     style: AppTextStyles.h5(
                       color: isDark
                           ? AppColors.textPrimaryDark
@@ -120,20 +130,19 @@ class ExerciseDetailScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppDimensions.md),
-                  ...[
-                    'Jaga tubuh tetap lurus',
-                    'Turunkan dada hampir menyentuh lantai',
-                    'Tarik napas saat turun, hembuskan saat naik',
-                    'Pemula bisa dari posisi lutut',
-                  ].map(
+                  ...tips.map(
                     (t) => Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(
-                            Icons.check_circle,
-                            size: 18,
-                            color: AppColors.accent,
+                          const Padding(
+                            padding: EdgeInsets.only(top: 2.0),
+                            child: Icon(
+                              Icons.check_circle,
+                              size: 18,
+                              color: AppColors.accent,
+                            ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -154,12 +163,7 @@ class ExerciseDetailScreen extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     height: AppDimensions.buttonLg,
-                    child: ElevatedButton(
-                      onPressed: () {},
-                      child: const Text('Tambahkan ke Latihan'),
-                    ),
-                  ),
-                  const SizedBox(height: AppDimensions.xxl),
+                  ), // Removed empty space placeholder button
                 ],
               ),
             ),
@@ -178,20 +182,24 @@ class ExerciseDetailScreen extends StatelessWidget {
     child: Text(t, style: AppTextStyles.labelSmall(color: c)),
   );
 
-  Widget _info(String v, String l, bool d) => Column(
-    children: [
-      Text(
-        v,
-        style: AppTextStyles.h4(
-          color: d ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+  Widget _info(String l, String v, bool d) => Expanded(
+        child: Column(
+          children: [
+            Text(
+              v,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.h5(
+                color: d ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              l,
+              style: AppTextStyles.caption(
+                color: d ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+              ),
+            ),
+          ],
         ),
-      ),
-      Text(
-        l,
-        style: AppTextStyles.caption(
-          color: d ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-        ),
-      ),
-    ],
-  );
+      );
 }

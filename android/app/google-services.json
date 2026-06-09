@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "55684754053-fs0jb13v138bsdcq1ikbh4ui3af5qua6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.fitforge.fitforge",
+            "certificate_hash": "d64ceb3f2f59d2142687c32d1bac35f070fd8004"
+          }
+        },
+        {
           "client_id": "55684754053-65cujj4bgt9gh03reec2toepfmboo5j5.apps.googleusercontent.com",
           "client_type": 3
         }

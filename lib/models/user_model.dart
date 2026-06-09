@@ -11,6 +11,8 @@ class UserModel {
   final String? workoutGoal;
   final String? trainingLevel;
   final String? avatarUrl;
+  final bool hasEquipment;
+  final String flowPreference;
   final DateTime createdAt;
   final DateTime lastActiveAt;
   final int streak;
@@ -29,6 +31,8 @@ class UserModel {
     this.workoutGoal,
     this.trainingLevel,
     this.avatarUrl,
+    this.hasEquipment = false,
+    this.flowPreference = 'guided',
     required this.createdAt,
     required this.lastActiveAt,
     this.streak = 0,
@@ -36,6 +40,8 @@ class UserModel {
     this.totalCalories = 0,
     this.totalDuration = 0,
   });
+
+  bool get isPro => flowPreference == 'efficient';
 
   int get age {
     if (dateOfBirth == null) return 0;
@@ -76,6 +82,8 @@ class UserModel {
       workoutGoal: map['workoutGoal'],
       trainingLevel: map['trainingLevel'],
       avatarUrl: map['avatarUrl'],
+      hasEquipment: map['hasEquipment'] ?? false,
+      flowPreference: map['flowPreference'] ?? 'guided',
       createdAt: map['createdAt'] != null
           ? (map['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
@@ -102,6 +110,8 @@ class UserModel {
       'workoutGoal': workoutGoal,
       'trainingLevel': trainingLevel,
       'avatarUrl': avatarUrl,
+      'hasEquipment': hasEquipment,
+      'flowPreference': flowPreference,
       'createdAt': Timestamp.fromDate(createdAt),
       'lastActiveAt': Timestamp.fromDate(lastActiveAt),
       'streak': streak,
@@ -121,6 +131,8 @@ class UserModel {
     String? workoutGoal,
     String? trainingLevel,
     String? avatarUrl,
+    bool? hasEquipment,
+    String? flowPreference,
     int? streak,
     int? totalWorkouts,
     double? totalCalories,
@@ -137,6 +149,8 @@ class UserModel {
       workoutGoal: workoutGoal ?? this.workoutGoal,
       trainingLevel: trainingLevel ?? this.trainingLevel,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      hasEquipment: hasEquipment ?? this.hasEquipment,
+      flowPreference: flowPreference ?? this.flowPreference,
       createdAt: createdAt,
       lastActiveAt: lastActiveAt,
       streak: streak ?? this.streak,

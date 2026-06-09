@@ -12,14 +12,36 @@ class AuthProvider extends ChangeNotifier {
   UserModel? _userModel;
   bool _isLoading = false;
   String? _error;
+  List<Map<String, dynamic>> _notifications = [
+    {
+      'id': '1',
+      'title': 'Selamat Datang!',
+      'body': 'Mulai harimu dengan latihan yang menyegarkan.',
+      'time': 'Sekarang',
+      'isRead': false,
+      'type': 'system'
+    },
+    {
+      'id': '2',
+      'title': 'Tips Latihan',
+      'body': 'Jangan lupa lakukan pemanasan sebelum memulai.',
+      'time': '5 menit lalu',
+      'isRead': false,
+      'type': 'tips'
+    },
+  ];
 
   User? get firebaseUser => _firebaseUser;
   UserModel? get userModel => _userModel;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  List<Map<String, dynamic>> get notifications => _notifications;
+  int get unreadCount => _notifications.where((n) => !n['isRead']).length;
   bool get isLoggedIn => _firebaseUser != null;
   bool get isProfileComplete =>
-      _userModel?.workoutGoal != null && _userModel?.trainingLevel != null;
+      _userModel?.dateOfBirth != null &&
+      _userModel?.workoutGoal != null &&
+      _userModel?.trainingLevel != null;
 
   AuthProvider() {
     _authService.authStateChanges.listen(_onAuthStateChanged);
@@ -71,11 +93,13 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> signInWithGoogle() async {
     _setLoading(true);
+    _error = null;
     try {
       await _authService.signInWithGoogle();
       _error = null;
     } catch (e) {
-      _error = 'Gagal masuk dengan Google. Silakan coba lagi.';
+      debugPrint('Google Sign-In Error: $e');
+      _error = 'Gagal masuk dengan Google: ${e.toString()}';
     }
     _setLoading(false);
   }
@@ -91,6 +115,16 @@ class AuthProvider extends ChangeNotifier {
       _error = 'Terjadi kesalahan. Silakan coba lagi.';
     }
     _setLoading(false);
+  }
+
+  Future<void> refreshUser() async {
+    if (_firebaseUser == null) return;
+    try {
+      _userModel = await _firestoreService.getUser(_firebaseUser!.uid);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error refreshing user: $e');
+    }
   }
 
   Future<void> updateUserProfile(Map<String, dynamic> data) async {
@@ -120,6 +154,13 @@ class AuthProvider extends ChangeNotifier {
 
   void clearError() {
     _error = null;
+    notifyListeners();
+  }
+
+  void markNotificationsAsRead() {
+    for (var n in _notifications) {
+      n['isRead'] = true;
+    }
     notifyListeners();
   }
 

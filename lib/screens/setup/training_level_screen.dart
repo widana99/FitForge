@@ -52,7 +52,7 @@ class _TrainingLevelScreenState extends State<TrainingLevelScreen> {
         'trainingLevel': _selectedLevel,
       });
       if (mounted) {
-        Navigator.pushNamed(context, AppRoutes.scheduleSetup);
+        Navigator.pushNamed(context, AppRoutes.userType);
       }
     }
   }
@@ -170,11 +170,12 @@ class _TrainingLevelScreenState extends State<TrainingLevelScreen> {
                               ? AppColors.textSecondaryDark
                               : AppColors.textSecondaryLight)),
                   const SizedBox(height: AppDimensions.sm),
-                  Row(
+                  Wrap(
+                    spacing: AppDimensions.sm,
+                    runSpacing: 4,
                     children: [
                       _buildInfoChip(
                           Icons.calendar_today_outlined, level.frequency, isDark),
-                      const SizedBox(width: AppDimensions.sm),
                       _buildInfoChip(
                           Icons.timer_outlined, level.duration, isDark),
                     ],

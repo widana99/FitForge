@@ -3,6 +3,7 @@ import '../../config/theme/app_colors.dart';
 import '../../config/theme/app_text_styles.dart';
 import '../../config/theme/app_dimensions.dart';
 import '../../config/routes/app_routes.dart';
+import '../../services/workout_presets.dart';
 
 class ExerciseListScreen extends StatefulWidget {
   const ExerciseListScreen({super.key});
@@ -20,27 +21,71 @@ class _ExerciseListScreenState extends State<ExerciseListScreen> {
     'Semua',
     'Dada',
     'Punggung',
-    'Kaki',
     'Bahu',
     'Lengan',
-    'Core',
+    'Perut',
+    'Kaki',
     'Kardio',
   ];
 
-  final List<_Exercise> _exercises = [
-    _Exercise('Push Up', 'Dada', 'beginner', 3, 12, 0, '💪'),
-    _Exercise('Bench Press', 'Dada', 'intermediate', 4, 10, 0, '🏋️'),
-    _Exercise('Squat', 'Kaki', 'beginner', 3, 15, 0, '🦵'),
-    _Exercise('Deadlift', 'Punggung', 'advanced', 4, 8, 0, '🏋️'),
-    _Exercise('Plank', 'Core', 'beginner', 3, 0, 30, '🧘'),
-    _Exercise('Burpee', 'Kardio', 'intermediate', 3, 10, 0, '🔥'),
-    _Exercise('Pull Up', 'Punggung', 'intermediate', 3, 8, 0, '💪'),
-    _Exercise('Lunges', 'Kaki', 'beginner', 3, 12, 0, '🏃'),
-    _Exercise('Shoulder Press', 'Bahu', 'intermediate', 3, 10, 0, '💪'),
-    _Exercise('Bicep Curl', 'Lengan', 'beginner', 3, 12, 0, '💪'),
-    _Exercise('Mountain Climber', 'Kardio', 'intermediate', 3, 0, 30, '🏔️'),
-    _Exercise('Russian Twist', 'Core', 'beginner', 3, 15, 0, '🧘'),
-  ];
+  List<_Exercise> _exercises = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExercises();
+  }
+
+  void _loadExercises() {
+    _exercises = WorkoutPresets.exerciseDB.entries.map((e) {
+      final data = e.value;
+      final tags = List<String>.from(data['tags'] ?? []);
+      final nameStr = (data['name'] ?? '').toString().toLowerCase();
+      final focusStr = (data['focus'] ?? '').toString().toLowerCase();
+      
+      String difficulty = 'beginner';
+      if (tags.contains('Menengah')) difficulty = 'intermediate';
+      if (tags.contains('Mahir')) difficulty = 'advanced';
+      
+      String muscle = 'Kardio';
+      
+      // Smart Semantic Parser (Solusi Kritis)
+      if (nameStr.contains('push') || nameStr.contains('chest') || nameStr.contains('fly') || nameStr.contains('pec')) {
+         muscle = 'Dada';
+      } else if (nameStr.contains('pull') || nameStr.contains('row') || nameStr.contains('deadlift') || nameStr.contains('back') || nameStr.contains('chin')) {
+         muscle = 'Punggung';
+      } else if (nameStr.contains('curl') || nameStr.contains('tricep') || nameStr.contains('bicep') || nameStr.contains('extension')) {
+         muscle = 'Lengan';
+      } else if (nameStr.contains('shoulder') || nameStr.contains('raise') || nameStr.contains('press') || nameStr.contains('handstand') || focusStr.contains('bahu')) {
+         muscle = 'Bahu';
+      } else if (tags.contains('Perut') || focusStr.contains('inti') || nameStr.contains('plank') || nameStr.contains('twist')) {
+         muscle = 'Perut';
+      } else if (tags.contains('Kaki') || tags.contains('Bokong') || nameStr.contains('squat') || nameStr.contains('lunge') || nameStr.contains('glute')) {
+         muscle = 'Kaki';
+      } else {
+         muscle = 'Kardio';
+      }
+
+      String emoji = '🔥';
+      if (muscle == 'Dada') emoji = '🦍';
+      else if (muscle == 'Punggung') emoji = '🦇';
+      else if (muscle == 'Bahu') emoji = '🗿';
+      else if (muscle == 'Lengan') emoji = '💪';
+      else if (muscle == 'Kaki') emoji = '🦵';
+      else if (muscle == 'Perut') emoji = '🍫';
+
+      return _Exercise(
+        id: e.key,
+        name: data['name'] ?? '',
+        muscle: muscle,
+        difficulty: difficulty,
+        sets: 3, 
+        reps: tags.contains('Tanpa Alat') ? 0 : 12,
+        duration: tags.contains('Tanpa Alat') ? 45 : 0,
+        emoji: emoji,
+      );
+    }).toList();
+  }
 
   List<_Exercise> get _filtered {
     var list = _exercises;
@@ -206,7 +251,7 @@ class _ExerciseListScreenState extends State<ExerciseListScreen> {
 
   Widget _buildListCard(_Exercise ex, bool isDark) {
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, AppRoutes.exerciseDetail),
+      onTap: () => Navigator.pushNamed(context, AppRoutes.exerciseDetail, arguments: ex.id),
       child: Container(
         padding: const EdgeInsets.all(AppDimensions.lg),
         decoration: BoxDecoration(
@@ -274,7 +319,7 @@ class _ExerciseListScreenState extends State<ExerciseListScreen> {
 
   Widget _buildGridCard(_Exercise ex, bool isDark) {
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, AppRoutes.exerciseDetail),
+      onTap: () => Navigator.pushNamed(context, AppRoutes.exerciseDetail, arguments: ex.id),
       child: Container(
         padding: const EdgeInsets.all(AppDimensions.md),
         decoration: BoxDecoration(
@@ -363,6 +408,7 @@ class _ExerciseListScreenState extends State<ExerciseListScreen> {
 }
 
 class _Exercise {
+  final String id;
   final String name;
   final String muscle;
   final String difficulty;
@@ -371,13 +417,14 @@ class _Exercise {
   final int duration;
   final String emoji;
 
-  _Exercise(
-    this.name,
-    this.muscle,
-    this.difficulty,
-    this.sets,
-    this.reps,
-    this.duration,
-    this.emoji,
-  );
+  _Exercise({
+    required this.id,
+    required this.name,
+    required this.muscle,
+    required this.difficulty,
+    required this.sets,
+    required this.reps,
+    required this.duration,
+    required this.emoji,
+  });
 }

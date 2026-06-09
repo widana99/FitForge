@@ -1,15 +1,40 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../config/theme/app_colors.dart';
 import '../../config/theme/app_text_styles.dart';
 import '../../config/theme/app_dimensions.dart';
 import '../../config/routes/app_routes.dart';
+import '../../providers/auth_provider.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
+  String _getTrainingLevelEmoji(String level) {
+    switch (level.toLowerCase()) {
+      case 'beginner':
+        return '🌱 Pemula';
+      case 'intermediate':
+        return '⚡ Menengah';
+      case 'advanced':
+        return '🔥 Mahir';
+      default:
+        return '🌱 Pemula';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final auth = context.watch<AuthProvider>();
+    final user = auth.userModel;
+
+    if (user == null) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -34,34 +59,47 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: const Icon(Icons.person_rounded,
-                    size: 48, color: Colors.white),
+                child: user.avatarUrl != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(50),
+                        child: Image.network(
+                          user.avatarUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(
+                              Icons.person_rounded,
+                              size: 48,
+                              color: Colors.white),
+                        ),
+                      )
+                    : const Icon(Icons.person_rounded,
+                        size: 48, color: Colors.white),
               ),
               const SizedBox(height: AppDimensions.lg),
-              Text('Pengguna FitForge',
+              Text(user.name.isEmpty ? 'Pengguna FitForge' : user.name,
                   style: AppTextStyles.h4(
                       color: isDark
                           ? AppColors.textPrimaryDark
                           : AppColors.textPrimaryLight)),
               const SizedBox(height: 4),
-              Text('user@email.com',
+              Text(user.email,
                   style: AppTextStyles.bodyMedium(
                       color: isDark
                           ? AppColors.textSecondaryDark
                           : AppColors.textSecondaryLight)),
               const SizedBox(height: AppDimensions.sm),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.12),
-                  borderRadius:
-                      BorderRadius.circular(AppDimensions.radiusFull),
+              if (user.trainingLevel != null)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    borderRadius:
+                        BorderRadius.circular(AppDimensions.radiusFull),
+                  ),
+                  child: Text(_getTrainingLevelEmoji(user.trainingLevel!),
+                      style: AppTextStyles.labelSmall(
+                          color: AppColors.primary)),
                 ),
-                child: Text('🌱 Pemula',
-                    style: AppTextStyles.labelSmall(
-                        color: AppColors.primary)),
-              ),
 
               const SizedBox(height: AppDimensions.xxl),
 
@@ -76,28 +114,38 @@ class ProfileScreen extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildBodyStat('65', 'kg', 'Berat', isDark),
+                    _buildBodyStat(user.weight?.toStringAsFixed(0) ?? '-',
+                        'kg', 'Berat', isDark),
                     Container(
                         width: 1,
                         height: 40,
                         color: isDark
                             ? AppColors.darkElevated
                             : AppColors.lightElevated),
-                    _buildBodyStat('170', 'cm', 'Tinggi', isDark),
+                    _buildBodyStat(user.height?.toStringAsFixed(0) ?? '-',
+                        'cm', 'Tinggi', isDark),
                     Container(
                         width: 1,
                         height: 40,
                         color: isDark
                             ? AppColors.darkElevated
                             : AppColors.lightElevated),
-                    _buildBodyStat('22.5', '', 'BMI', isDark),
+                    _buildBodyStat(
+                        user.bmi == 0 ? '-' : user.bmi.toStringAsFixed(1),
+                        '',
+                        'BMI',
+                        isDark),
                     Container(
                         width: 1,
                         height: 40,
                         color: isDark
                             ? AppColors.darkElevated
                             : AppColors.lightElevated),
-                    _buildBodyStat('24', 'thn', 'Usia', isDark),
+                    _buildBodyStat(
+                        user.age == 0 ? '-' : user.age.toString(),
+                        'thn',
+                        'Usia',
+                        isDark),
                   ],
                 ),
               ),
@@ -146,9 +194,12 @@ class ProfileScreen extends StatelessWidget {
                             child: const Text('Batal'),
                           ),
                           TextButton(
-                            onPressed: () {
-                              Navigator.pushNamedAndRemoveUntil(
-                                  context, AppRoutes.login, (r) => false);
+                            onPressed: () async {
+                              await auth.signOut();
+                              if (context.mounted) {
+                                Navigator.pushNamedAndRemoveUntil(
+                                    context, AppRoutes.login, (r) => false);
+                              }
                             },
                             child: const Text('Keluar',
                                 style: TextStyle(color: AppColors.error)),

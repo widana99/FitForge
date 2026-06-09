@@ -50,20 +50,35 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  void _signIn() {
+  Future<void> _signIn() async {
     if (_formKey.currentState!.validate()) {
-      context.read<AuthProvider>().signInWithEmail(
+      final auth = context.read<AuthProvider>();
+      await auth.signInWithEmail(
         _emailController.text.trim(),
         _passwordController.text,
       );
-      // Navigate on success — handled by auth state listener
-      Navigator.pushReplacementNamed(context, AppRoutes.main);
+
+      if (auth.error == null && mounted) {
+        if (auth.isProfileComplete) {
+          Navigator.pushReplacementNamed(context, AppRoutes.main);
+        } else {
+          Navigator.pushReplacementNamed(context, AppRoutes.personalData);
+        }
+      }
     }
   }
 
-  void _signInWithGoogle() {
-    context.read<AuthProvider>().signInWithGoogle();
-    Navigator.pushReplacementNamed(context, AppRoutes.main);
+  Future<void> _signInWithGoogle() async {
+    final auth = context.read<AuthProvider>();
+    await auth.signInWithGoogle();
+
+    if (auth.error == null && mounted) {
+      if (auth.isProfileComplete) {
+        Navigator.pushReplacementNamed(context, AppRoutes.main);
+      } else {
+        Navigator.pushReplacementNamed(context, AppRoutes.personalData);
+      }
+    }
   }
 
   @override
@@ -285,19 +300,30 @@ class _LoginScreenState extends State<LoginScreen>
                     SizedBox(
                       height: AppDimensions.buttonLg,
                       child: OutlinedButton.icon(
-                        onPressed: _signInWithGoogle,
-                        icon: Container(
-                          width: 24,
-                          height: 24,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.g_mobiledata_rounded,
-                            size: 24,
-                          ),
-                        ),
-                        label: const Text('Masuk dengan Google'),
+                        onPressed: auth.isLoading ? null : _signInWithGoogle,
+                        icon: auth.isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.primary,
+                                ),
+                              )
+                            : Container(
+                                width: 24,
+                                height: 24,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.g_mobiledata_rounded,
+                                  size: 24,
+                                ),
+                              ),
+                        label: auth.isLoading
+                            ? const Text('Menghubungkan...')
+                            : const Text('Masuk dengan Google'),
                       ),
                     ),
 

@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'dart:async';
 import '../../config/theme/app_colors.dart';
 import '../../config/theme/app_text_styles.dart';
 import '../../config/theme/app_dimensions.dart';
+import '../../models/workout_model.dart';
+import '../../models/workout_history_model.dart';
+import '../../services/firestore_service.dart';
+import '../../providers/auth_provider.dart';
+import 'package:flutter/services.dart';
 
 class WorkoutSessionScreen extends StatefulWidget {
-  const WorkoutSessionScreen({super.key});
+  final WorkoutModel? workout;
+
+  const WorkoutSessionScreen({super.key, this.workout});
 
   @override
   State<WorkoutSessionScreen> createState() => _WorkoutSessionScreenState();
@@ -17,6 +25,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
   bool _paused = false;
   bool _completed = false;
   bool _resting = false;
+  bool _isTransitioning = false;
 
   int _currentExercise = 0;
   int _currentSet = 1;
@@ -28,13 +37,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
 
-  final List<_ExerciseData> _exercises = [
-    _ExerciseData('Push Up', 'Dada', 3, 12, 0, '💪'),
-    _ExerciseData('Squat', 'Kaki', 3, 15, 0, '🦵'),
-    _ExerciseData('Plank', 'Core', 3, 0, 30, '🧘'),
-    _ExerciseData('Burpee', 'Kardio', 3, 10, 0, '🔥'),
-    _ExerciseData('Mountain Climber', 'Kardio', 3, 0, 30, '🏔️'),
-  ];
+  late List<WorkoutExercise> _exercises;
+  late String _workoutName;
+  late String _workoutEmoji;
 
   @override
   void initState() {
@@ -46,6 +51,51 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
     _pulseAnim = Tween<double>(begin: 0.95, end: 1.05).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+
+    _initializeData();
+  }
+
+  void _initializeData() {
+    if (widget.workout != null) {
+      _exercises = widget.workout!.exercises;
+      _workoutName = widget.workout!.name;
+      _workoutEmoji = _getEmojiForCategory(widget.workout!.category);
+    } else {
+      // Fallback/Default if no workout passed
+      _exercises = [
+        WorkoutExercise(
+          exerciseId: 'pushup',
+          exerciseName: 'Push Up',
+          sets: 3,
+          reps: 12,
+          duration: 0,
+          restTime: 15,
+        ),
+        WorkoutExercise(
+          exerciseId: 'squat',
+          exerciseName: 'Squat',
+          sets: 3,
+          reps: 15,
+          duration: 0,
+          restTime: 15,
+        ),
+      ];
+      _workoutName = 'Full Body Workout';
+      _workoutEmoji = '💪';
+    }
+  }
+
+  String _getEmojiForCategory(String category) {
+    switch (category) {
+      case 'muscle_building':
+        return '💪';
+      case 'weight_loss':
+        return '🔥';
+      case 'general_fitness':
+        return '❤️';
+      default:
+        return '🏋️';
+    }
   }
 
   @override
@@ -60,26 +110,51 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
     final ex = _exercises[_currentExercise];
     if (ex.duration > 0) {
       _timeLeft = ex.duration;
-      _startTimer();
     }
+    _startTimer();
   }
 
   void _startTimer() {
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return;
       setState(() {
-        _totalElapsed++;
-        if (_resting) {
-          _restTime--;
-          if (_restTime <= 0) {
-            _resting = false;
-            _timer?.cancel();
-            _nextSet();
-          }
-        } else if (_exercises[_currentExercise].duration > 0) {
-          _timeLeft--;
-          if (_timeLeft <= 0) {
-            _timer?.cancel();
-            _onSetComplete();
+        if (!_paused) {
+          _totalElapsed++;
+          if (_resting) {
+            _restTime--;
+
+            // Haptic Feedback for Rest Time
+            if (_restTime > 0 && _restTime <= 3) {
+              HapticFeedback.lightImpact();
+            } else if (_restTime == 0) {
+              HapticFeedback.vibrate();
+            }
+
+            if (_restTime <= 0) {
+              _resting = false;
+              _timer?.cancel();
+              if (_isTransitioning) {
+                 _isTransitioning = false;
+                 _nextExercise();
+              } else {
+                 _nextSet();
+              }
+            }
+          } else if (_exercises[_currentExercise].duration > 0) {
+            _timeLeft--;
+
+            // Haptic Feedback for Work Time
+            if (_timeLeft > 0 && _timeLeft <= 3) {
+              HapticFeedback.heavyImpact();
+            } else if (_timeLeft == 0) {
+              HapticFeedback.vibrate();
+            }
+
+            if (_timeLeft <= 0) {
+              _timer?.cancel();
+              _onSetComplete();
+            }
           }
         }
       });
@@ -91,11 +166,20 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
     if (_currentSet < ex.sets) {
       setState(() {
         _resting = true;
-        _restTime = 15;
+        _restTime = ex.restTime > 0 ? ex.restTime : 15;
       });
       _startTimer();
     } else {
-      _nextExercise();
+      if (_currentExercise < _exercises.length - 1) {
+        setState(() {
+          _resting = true;
+          _isTransitioning = true;
+          _restTime = 30; // Mandatory transition rest
+        });
+        _startTimer();
+      } else {
+        _nextExercise(); // This will trigger _completeWorkout
+      }
     }
   }
 
@@ -105,9 +189,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
       final ex = _exercises[_currentExercise];
       if (ex.duration > 0) {
         _timeLeft = ex.duration;
-        _startTimer();
       }
     });
+    _startTimer();
   }
 
   void _nextExercise() {
@@ -118,21 +202,41 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
         final ex = _exercises[_currentExercise];
         if (ex.duration > 0) {
           _timeLeft = ex.duration;
-          _startTimer();
         }
+        _resting = false;
       });
+      _startTimer();
     } else {
-      setState(() => _completed = true);
-      _timer?.cancel();
+      _completeWorkout();
+    }
+  }
+
+  Future<void> _completeWorkout() async {
+    _timer?.cancel();
+    setState(() => _completed = true);
+
+    final auth = context.read<AuthProvider>();
+    final firestore = FirestoreService();
+
+    if (auth.userModel != null) {
+      final history = WorkoutHistoryModel(
+        id: '',
+        workoutId: widget.workout?.id ?? 'custom',
+        workoutName: _workoutName,
+        date: DateTime.now(),
+        duration: _totalElapsed,
+        caloriesBurned: (_totalElapsed / 60 * 8.5),
+        exercisesCompleted: _exercises.length,
+        totalExercises: _exercises.length,
+        completedExercises: _exercises.map((e) => e.exerciseName).toList(),
+      );
+
+      await firestore.saveWorkoutHistory(auth.userModel!.uid, history);
+      await auth.refreshUser();
     }
   }
 
   void _togglePause() {
-    if (_paused) {
-      _startTimer();
-    } else {
-      _timer?.cancel();
-    }
     setState(() => _paused = !_paused);
   }
 
@@ -144,7 +248,10 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
   }
 
   Widget _buildPreSessionView() {
+    final auth = context.read<AuthProvider>();
+    final user = auth.userModel;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isBeginner = user?.trainingLevel == 'beginner';
 
     return Scaffold(
       appBar: AppBar(
@@ -163,20 +270,46 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
               width: double.infinity,
               padding: const EdgeInsets.all(AppDimensions.xl),
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
                 borderRadius: BorderRadius.circular(AppDimensions.radiusXl),
+                image: DecorationImage(
+                  image: NetworkImage(
+                    widget.workout?.thumbnailUrl != null && widget.workout!.thumbnailUrl.isNotEmpty
+                        ? widget.workout!.thumbnailUrl
+                        : 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=2070&auto=format&fit=crop'
+                  ),
+                  fit: BoxFit.cover,
+                  colorFilter: ColorFilter.mode(
+                    Colors.black.withValues(alpha: 0.6), 
+                    BlendMode.darken
+                  ),
+                ),
               ),
               child: Column(
                 children: [
-                  const Text('💪', style: TextStyle(fontSize: 48)),
+                  Text(_workoutEmoji, style: const TextStyle(fontSize: 48)),
                   const SizedBox(height: AppDimensions.md),
                   Text(
-                    'Full Body Workout',
+                    _workoutName,
                     style: AppTextStyles.h3(color: Colors.white),
                   ),
                   const SizedBox(height: AppDimensions.sm),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildHeaderChip(
+                        isBeginner ? 'Pemula' : 'Berpengalaman',
+                        Colors.white.withValues(alpha: 0.2),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildHeaderChip(
+                        widget.workout?.category == 'fat_loss' ? 'Fat Loss' : 'Muscle',
+                        Colors.white.withValues(alpha: 0.2),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppDimensions.lg),
                   Text(
-                    '${_exercises.length} gerakan • ~20 min • 250 kal',
+                    '${_exercises.length} gerakan • ~${widget.workout?.estimatedDuration ?? 20} min • ${widget.workout?.estimatedCalories ?? 250} kal',
                     style: AppTextStyles.bodyMedium(
                       color: Colors.white.withValues(alpha: 0.8),
                     ),
@@ -184,80 +317,96 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
                 ],
               ),
             ),
+            if (isBeginner) ...[
+              const SizedBox(height: AppDimensions.xl),
+              Container(
+                padding: const EdgeInsets.all(AppDimensions.lg),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusLg),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.lightbulb_outline_rounded, color: AppColors.primary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Tips: Fokus pada teknik gerakan yang benar daripada kecepatan.',
+                        style: AppTextStyles.bodySmall(color: AppColors.primary, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: AppDimensions.xxl),
             Text(
               'Daftar Gerakan',
               style: AppTextStyles.h5(
-                color: isDark
-                    ? AppColors.textPrimaryDark
-                    : AppColors.textPrimaryLight,
+                color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
               ),
             ),
             const SizedBox(height: AppDimensions.lg),
             Expanded(
               child: ListView.separated(
                 itemCount: _exercises.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(height: AppDimensions.sm),
+                separatorBuilder: (_, __) => const SizedBox(height: AppDimensions.sm),
                 itemBuilder: (context, index) {
                   final ex = _exercises[index];
-                  return Container(
-                    padding: const EdgeInsets.all(AppDimensions.lg),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
-                      borderRadius: BorderRadius.circular(
-                        AppDimensions.radiusMd,
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.pushNamed(
+                        context, 
+                        '/exercises/detail', 
+                        arguments: ex.exerciseId,
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(AppDimensions.lg),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
+                        border: Border.all(color: isDark ? AppColors.darkElevated : AppColors.lightElevated),
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Center(
-                            child: Text(
-                              ex.emoji,
-                              style: const TextStyle(fontSize: 22),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Center(
+                              child: Icon(Icons.fitness_center_rounded, size: 22, color: AppColors.primary),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: AppDimensions.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                ex.name,
-                                style: AppTextStyles.labelMedium(
-                                  color: isDark
-                                      ? AppColors.textPrimaryDark
-                                      : AppColors.textPrimaryLight,
+                          const SizedBox(width: AppDimensions.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  ex.exerciseName,
+                                  style: AppTextStyles.labelMedium(
+                                    color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                ex.reps > 0
-                                    ? '${ex.sets} set × ${ex.reps} rep'
-                                    : '${ex.sets} set × ${ex.duration}s',
-                                style: AppTextStyles.bodySmall(
-                                  color: isDark
-                                      ? AppColors.textSecondaryDark
-                                      : AppColors.textSecondaryLight,
+                                Text(
+                                  ex.reps > 0
+                                      ? '${ex.sets} set × ${ex.reps > 2 ? ex.reps - 2 : ex.reps}-${ex.reps} Reps'
+                                      : '${ex.sets} set × ${ex.duration} Detik',
+                                  style: AppTextStyles.bodySmall(
+                                    color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                        Text(
-                          ex.muscle,
-                          style: AppTextStyles.caption(
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ],
+                          const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.primary),
+                        ],
+                      ),
                     ),
                   );
                 },
@@ -274,6 +423,20 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderChip(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        text,
+        style: AppTextStyles.caption(color: Colors.white, fontWeight: FontWeight.bold),
       ),
     );
   }
@@ -320,9 +483,18 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
                           : AppColors.textSecondaryLight,
                     ),
                   ),
-                  Text(
-                    '${(_totalElapsed ~/ 60).toString().padLeft(2, '0')}:${(_totalElapsed % 60).toString().padLeft(2, '0')}',
-                    style: AppTextStyles.labelMedium(color: AppColors.primary),
+                  Row(
+                    children: [
+                      Text(
+                        '${(_totalElapsed / 60 * (widget.workout?.category == 'fat_loss' ? 12 : 8.5)).toStringAsFixed(1)} kcal',
+                        style: AppTextStyles.labelMedium(color: AppColors.error),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        '${(_totalElapsed ~/ 60).toString().padLeft(2, '0')}:${(_totalElapsed % 60).toString().padLeft(2, '0')}',
+                        style: AppTextStyles.labelMedium(color: AppColors.primary),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -360,12 +532,40 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
                             : AppColors.textSecondaryLight,
                       ),
                     ),
+                    const SizedBox(height: AppDimensions.xxxl),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () => setState(() => _restTime += 15),
+                          icon: const Icon(Icons.add_rounded, size: 18),
+                          label: const Text('15 Detik'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isDark ? AppColors.darkCard : AppColors.lightCard,
+                            foregroundColor: isDark ? Colors.white : Colors.black,
+                            elevation: 0,
+                            side: BorderSide(color: isDark ? Colors.white24 : Colors.black12),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            setState(() => _restTime = 0);
+                          },
+                          icon: const Icon(Icons.fast_forward_rounded, size: 18),
+                          label: const Text('Lewati ⏩'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
                   ] else ...[
-                    // Exercise emoji
-                    Text(ex.emoji, style: const TextStyle(fontSize: 64)),
+                    const Text('🏋️', style: TextStyle(fontSize: 64)),
                     const SizedBox(height: AppDimensions.xxl),
                     Text(
-                      ex.name,
+                      ex.exerciseName,
                       style: AppTextStyles.h2(
                         color: isDark
                             ? AppColors.textPrimaryDark
@@ -409,7 +609,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
                       )
                     else
                       Text(
-                        '${ex.reps} rep',
+                        '${ex.reps > 2 ? ex.reps - 2 : ex.reps}-${ex.reps} Reps',
                         style: AppTextStyles.h1(
                           color: AppColors.primary,
                         ).copyWith(fontSize: 48),
@@ -425,15 +625,13 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  // Pause
                   _buildControlButton(
                     _paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
                     'Pause',
                     _togglePause,
                     isDark,
                   ),
-                  // Done / Next
-                  if (!_resting && ex.reps > 0)
+                  if (!_resting)
                     SizedBox(
                       height: 64,
                       width: 180,
@@ -442,7 +640,6 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
                         child: const Text('Selesai Set ✓'),
                       ),
                     ),
-                  // Skip
                   _buildControlButton(
                     Icons.skip_next_rounded,
                     'Skip',
@@ -541,7 +738,6 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
               ),
               const SizedBox(height: AppDimensions.xxxl),
 
-              // Stats row
               Container(
                 padding: const EdgeInsets.all(AppDimensions.xl),
                 decoration: BoxDecoration(
@@ -565,7 +761,6 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
 
               const SizedBox(height: AppDimensions.xxl),
 
-              // Rating
               Text(
                 'Bagaimana sesimu?',
                 style: AppTextStyles.bodyMedium(
@@ -641,22 +836,4 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
       ],
     );
   }
-}
-
-class _ExerciseData {
-  final String name;
-  final String muscle;
-  final int sets;
-  final int reps;
-  final int duration;
-  final String emoji;
-
-  _ExerciseData(
-    this.name,
-    this.muscle,
-    this.sets,
-    this.reps,
-    this.duration,
-    this.emoji,
-  );
 }
