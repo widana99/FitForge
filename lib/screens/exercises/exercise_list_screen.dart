@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../config/theme/app_colors.dart';
 import '../../config/theme/app_text_styles.dart';
 import '../../config/theme/app_dimensions.dart';
 import '../../config/routes/app_routes.dart';
-import '../../services/workout_presets.dart';
+import '../../models/exercise_model.dart';
 
 class ExerciseListScreen extends StatefulWidget {
   const ExerciseListScreen({super.key});
@@ -27,82 +28,6 @@ class _ExerciseListScreenState extends State<ExerciseListScreen> {
     'Kaki',
     'Kardio',
   ];
-
-  List<_Exercise> _exercises = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadExercises();
-  }
-
-  void _loadExercises() {
-    _exercises = WorkoutPresets.exerciseDB.entries.map((e) {
-      final data = e.value;
-      final tags = List<String>.from(data['tags'] ?? []);
-      final nameStr = (data['name'] ?? '').toString().toLowerCase();
-      final focusStr = (data['focus'] ?? '').toString().toLowerCase();
-      
-      String difficulty = 'beginner';
-      if (tags.contains('Menengah')) difficulty = 'intermediate';
-      if (tags.contains('Mahir')) difficulty = 'advanced';
-      
-      String muscle = 'Kardio';
-      
-      // Smart Semantic Parser (Solusi Kritis)
-      if (nameStr.contains('push') || nameStr.contains('chest') || nameStr.contains('fly') || nameStr.contains('pec')) {
-         muscle = 'Dada';
-      } else if (nameStr.contains('pull') || nameStr.contains('row') || nameStr.contains('deadlift') || nameStr.contains('back') || nameStr.contains('chin')) {
-         muscle = 'Punggung';
-      } else if (nameStr.contains('curl') || nameStr.contains('tricep') || nameStr.contains('bicep') || nameStr.contains('extension')) {
-         muscle = 'Lengan';
-      } else if (nameStr.contains('shoulder') || nameStr.contains('raise') || nameStr.contains('press') || nameStr.contains('handstand') || focusStr.contains('bahu')) {
-         muscle = 'Bahu';
-      } else if (tags.contains('Perut') || focusStr.contains('inti') || nameStr.contains('plank') || nameStr.contains('twist')) {
-         muscle = 'Perut';
-      } else if (tags.contains('Kaki') || tags.contains('Bokong') || nameStr.contains('squat') || nameStr.contains('lunge') || nameStr.contains('glute')) {
-         muscle = 'Kaki';
-      } else {
-         muscle = 'Kardio';
-      }
-
-      String emoji = '🔥';
-      if (muscle == 'Dada') emoji = '🦍';
-      else if (muscle == 'Punggung') emoji = '🦇';
-      else if (muscle == 'Bahu') emoji = '🗿';
-      else if (muscle == 'Lengan') emoji = '💪';
-      else if (muscle == 'Kaki') emoji = '🦵';
-      else if (muscle == 'Perut') emoji = '🍫';
-
-      return _Exercise(
-        id: e.key,
-        name: data['name'] ?? '',
-        muscle: muscle,
-        difficulty: difficulty,
-        sets: 3, 
-        reps: tags.contains('Tanpa Alat') ? 0 : 12,
-        duration: tags.contains('Tanpa Alat') ? 45 : 0,
-        emoji: emoji,
-      );
-    }).toList();
-  }
-
-  List<_Exercise> get _filtered {
-    var list = _exercises;
-    if (_selectedGroup != 'Semua') {
-      list = list.where((e) => e.muscle == _selectedGroup).toList();
-    }
-    if (_searchController.text.isNotEmpty) {
-      list = list
-          .where(
-            (e) => e.name.toLowerCase().contains(
-              _searchController.text.toLowerCase(),
-            ),
-          )
-          .toList();
-    }
-    return list;
-  }
 
   @override
   void dispose() {
@@ -214,34 +139,69 @@ class _ExerciseListScreenState extends State<ExerciseListScreen> {
 
             // Exercise list
             Expanded(
-              child: _isGrid
-                  ? GridView.builder(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppDimensions.xl,
-                      ),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            mainAxisSpacing: AppDimensions.md,
-                            crossAxisSpacing: AppDimensions.md,
-                            childAspectRatio: 0.85,
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('exercises').snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (snapshot.hasError) {
+                    return Center(child: Text('Terjadi kesalahan: ${snapshot.error}'));
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Center(child: Text('Belum ada data gerakan.'));
+                  }
+
+                  List<ExerciseModel> allExercises = snapshot.data!.docs
+                      .map((doc) => ExerciseModel.fromFirestore(doc))
+                      .toList();
+
+                  List<ExerciseModel> filteredList = allExercises.where((ex) {
+                    bool matchGroup = _selectedGroup == 'Semua' || 
+                        ex.targetMuscle.toLowerCase().contains(_selectedGroup.toLowerCase());
+                    
+                    bool matchSearch = _searchController.text.isEmpty || 
+                        ex.name.toLowerCase().contains(_searchController.text.toLowerCase());
+                        
+                    return matchGroup && matchSearch;
+                  }).toList();
+
+                  if (filteredList.isEmpty) {
+                    return const Center(child: Text('Gerakan tidak ditemukan.'));
+                  }
+
+                  return _isGrid
+                      ? GridView.builder(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimensions.xl,
                           ),
-                      itemCount: _filtered.length,
-                      itemBuilder: (context, index) {
-                        return _buildGridCard(_filtered[index], isDark);
-                      },
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppDimensions.xl,
-                      ),
-                      itemCount: _filtered.length,
-                      separatorBuilder: (_, __) =>
-                          const SizedBox(height: AppDimensions.md),
-                      itemBuilder: (context, index) {
-                        return _buildListCard(_filtered[index], isDark);
-                      },
-                    ),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                mainAxisSpacing: AppDimensions.md,
+                                crossAxisSpacing: AppDimensions.md,
+                                childAspectRatio: 0.85,
+                              ),
+                          itemCount: filteredList.length,
+                          itemBuilder: (context, index) {
+                            return _buildGridCard(filteredList[index], isDark);
+                          },
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimensions.xl,
+                          ),
+                          itemCount: filteredList.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: AppDimensions.md),
+                          itemBuilder: (context, index) {
+                            return _buildListCard(filteredList[index], isDark);
+                          },
+                        );
+                },
+              ),
             ),
           ],
         ),
@@ -249,7 +209,7 @@ class _ExerciseListScreenState extends State<ExerciseListScreen> {
     );
   }
 
-  Widget _buildListCard(_Exercise ex, bool isDark) {
+  Widget _buildListCard(ExerciseModel ex, bool isDark) {
     return GestureDetector(
       onTap: () => Navigator.pushNamed(context, AppRoutes.exerciseDetail, arguments: ex.id),
       child: Container(
@@ -268,7 +228,7 @@ class _ExerciseListScreenState extends State<ExerciseListScreen> {
                 borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
               ),
               child: Center(
-                child: Text(ex.emoji, style: const TextStyle(fontSize: 28)),
+                child: Text(_getEmojiForMuscle(ex.targetMuscle), style: const TextStyle(fontSize: 28)),
               ),
             ),
             const SizedBox(width: AppDimensions.md),
@@ -287,12 +247,14 @@ class _ExerciseListScreenState extends State<ExerciseListScreen> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      _buildTag(ex.muscle, AppColors.primary, isDark),
+                      Flexible(child: _buildTag(ex.targetMuscle.split(',').first, AppColors.primary, isDark)),
                       const SizedBox(width: 6),
-                      _buildTag(
-                        _levelName(ex.difficulty),
-                        _levelColor(ex.difficulty),
-                        isDark,
+                      Flexible(
+                        child: _buildTag(
+                          _levelName(ex.level),
+                          _levelColor(ex.level),
+                          isDark,
+                        ),
                       ),
                     ],
                   ),
@@ -300,9 +262,9 @@ class _ExerciseListScreenState extends State<ExerciseListScreen> {
               ),
             ),
             Text(
-              ex.reps > 0
-                  ? '${ex.sets}×${ex.reps}'
-                  : '${ex.sets}×${ex.duration}s',
+              ex.type == 'Waktu'
+                  ? '3×${ex.duration}s'
+                  : '3×${ex.duration}',
               style: AppTextStyles.bodySmall(
                 color: isDark
                     ? AppColors.textSecondaryDark
@@ -317,7 +279,7 @@ class _ExerciseListScreenState extends State<ExerciseListScreen> {
     );
   }
 
-  Widget _buildGridCard(_Exercise ex, bool isDark) {
+  Widget _buildGridCard(ExerciseModel ex, bool isDark) {
     return GestureDetector(
       onTap: () => Navigator.pushNamed(context, AppRoutes.exerciseDetail, arguments: ex.id),
       child: Container(
@@ -337,7 +299,7 @@ class _ExerciseListScreenState extends State<ExerciseListScreen> {
                 borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
               ),
               child: Center(
-                child: Text(ex.emoji, style: const TextStyle(fontSize: 40)),
+                child: Text(_getEmojiForMuscle(ex.targetMuscle), style: const TextStyle(fontSize: 40)),
               ),
             ),
             const SizedBox(height: AppDimensions.md),
@@ -354,12 +316,14 @@ class _ExerciseListScreenState extends State<ExerciseListScreen> {
             const SizedBox(height: 4),
             Row(
               children: [
-                _buildTag(ex.muscle, AppColors.primary, isDark),
+                Flexible(child: _buildTag(ex.targetMuscle.split(',').first, AppColors.primary, isDark)),
                 const SizedBox(width: 4),
-                _buildTag(
-                  _levelName(ex.difficulty),
-                  _levelColor(ex.difficulty),
-                  isDark,
+                Flexible(
+                  child: _buildTag(
+                    _levelName(ex.level),
+                    _levelColor(ex.level),
+                    isDark,
+                  ),
                 ),
               ],
             ),
@@ -369,6 +333,17 @@ class _ExerciseListScreenState extends State<ExerciseListScreen> {
     );
   }
 
+  String _getEmojiForMuscle(String targetMuscle) {
+    final lower = targetMuscle.toLowerCase();
+    if (lower.contains('dada') || lower.contains('pektoral')) return '🦍';
+    if (lower.contains('punggung')) return '🦇';
+    if (lower.contains('bahu')) return '🗿';
+    if (lower.contains('lengan')) return '💪';
+    if (lower.contains('kaki') || lower.contains('quad') || lower.contains('bokong')) return '🦵';
+    if (lower.contains('perut') || lower.contains('inti')) return '🍫';
+    return '🔥';
+  }
+
   Widget _buildTag(String text, Color color, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -376,55 +351,27 @@ class _ExerciseListScreenState extends State<ExerciseListScreen> {
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
       ),
-      child: Text(text, style: AppTextStyles.caption(color: color)),
+      child: Text(
+        text, 
+        style: AppTextStyles.caption(color: color),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 
   String _levelName(String d) {
-    switch (d) {
-      case 'beginner':
-        return 'Pemula';
-      case 'intermediate':
-        return 'Menengah';
-      case 'advanced':
-        return 'Mahir';
-      default:
-        return d;
-    }
+    if (d.toLowerCase().contains('pemula')) return 'Pemula';
+    if (d.toLowerCase().contains('menengah')) return 'Menengah';
+    if (d.toLowerCase().contains('mahir')) return 'Mahir';
+    return d;
   }
 
   Color _levelColor(String d) {
-    switch (d) {
-      case 'beginner':
-        return AppColors.accent;
-      case 'intermediate':
-        return AppColors.primary;
-      case 'advanced':
-        return AppColors.secondary;
-      default:
-        return AppColors.primary;
-    }
+    final lower = d.toLowerCase();
+    if (lower.contains('pemula')) return AppColors.accent;
+    if (lower.contains('menengah')) return AppColors.primary;
+    if (lower.contains('mahir')) return AppColors.secondary;
+    return AppColors.primary;
   }
-}
-
-class _Exercise {
-  final String id;
-  final String name;
-  final String muscle;
-  final String difficulty;
-  final int sets;
-  final int reps;
-  final int duration;
-  final String emoji;
-
-  _Exercise({
-    required this.id,
-    required this.name,
-    required this.muscle,
-    required this.difficulty,
-    required this.sets,
-    required this.reps,
-    required this.duration,
-    required this.emoji,
-  });
 }

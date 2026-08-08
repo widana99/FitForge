@@ -20,8 +20,9 @@ class FocusWorkoutScreen extends StatefulWidget {
 
 class _FocusWorkoutScreenState extends State<FocusWorkoutScreen> {
   late String _selectedLevel;
-  late bool _hasEquipment;
-  late List<WorkoutModel> _workouts;
+
+  late List<WorkoutModel> _workouts = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -29,27 +30,35 @@ class _FocusWorkoutScreenState extends State<FocusWorkoutScreen> {
     // Inisialisasi awal mengambil riwayat pengguna
     final auth = context.read<AuthProvider>();
     _selectedLevel = auth.userModel?.trainingLevel ?? 'beginner';
-    _hasEquipment = auth.userModel?.hasEquipment ?? false;
+
     
     _generateWorkouts();
   }
 
-  void _generateWorkouts() {
+  void _generateWorkouts() async {
     setState(() {
-      if (widget.isGoalWorkout) {
-        _workouts = WorkoutPresets.getWorkoutsByGoal(
-          widget.focusCategory, 
-          _selectedLevel, 
-          _hasEquipment
-        );
-      } else {
-        _workouts = WorkoutPresets.getWorkoutsByFocus(
-          widget.focusCategory, 
-          _selectedLevel, 
-          _hasEquipment
-        );
-      }
+      _isLoading = true;
     });
+
+    List<WorkoutModel> result = [];
+    if (widget.isGoalWorkout) {
+      result = await WorkoutPresets.getWorkoutsByGoal(
+        widget.focusCategory, 
+        _selectedLevel,
+      );
+    } else {
+      result = await WorkoutPresets.getWorkoutsByFocus(
+        widget.focusCategory, 
+        _selectedLevel,
+      );
+    }
+
+    if (mounted) {
+      setState(() {
+        _workouts = result;
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -72,16 +81,18 @@ class _FocusWorkoutScreenState extends State<FocusWorkoutScreen> {
           _buildFilterSection(isDark),
           const Divider(height: 1, thickness: 1),
           Expanded(
-            child: _workouts.isEmpty 
-              ? Center(child: Text("Tidak ada latihan tersedia.", style: AppTextStyles.bodyLarge(color: isDark ? Colors.white54 : Colors.black54)))
-              : ListView.separated(
-                  padding: const EdgeInsets.all(AppDimensions.xl),
-                  itemCount: _workouts.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: AppDimensions.lg),
-                  itemBuilder: (context, index) {
-                    return _buildWorkoutCard(_workouts[index], isDark);
-                  },
-                ),
+            child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _workouts.isEmpty 
+                ? Center(child: Text("Tidak ada latihan tersedia.", style: AppTextStyles.bodyLarge(color: isDark ? Colors.white54 : Colors.black54)))
+                : ListView.separated(
+                    padding: const EdgeInsets.all(AppDimensions.xl),
+                    itemCount: _workouts.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: AppDimensions.lg),
+                    itemBuilder: (context, index) {
+                      return _buildWorkoutCard(_workouts[index], isDark);
+                    },
+                  ),
           ),
         ],
       ),
@@ -110,16 +121,7 @@ class _FocusWorkoutScreenState extends State<FocusWorkoutScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          Text("Atur Peralatan:", style: AppTextStyles.labelMedium(color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _buildEquipChip('Tanpa Alat', false, isDark),
-              const SizedBox(width: 8),
-              _buildEquipChip('Memakai Alat', true, isDark),
-            ],
-          ),
+
         ],
       ),
     );
@@ -146,26 +148,7 @@ class _FocusWorkoutScreenState extends State<FocusWorkoutScreen> {
     );
   }
 
-  Widget _buildEquipChip(String label, bool value, bool isDark) {
-    bool isSelected = _hasEquipment == value;
-    return ChoiceChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (selected) {
-         if (selected) {
-            _hasEquipment = value;
-            _generateWorkouts();
-         }
-      },
-      selectedColor: AppColors.accent.withValues(alpha: 0.2),
-      checkmarkColor: AppColors.accent,
-      labelStyle: TextStyle(
-        color: isSelected ? AppColors.accent : (isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight),
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-      ),
-      backgroundColor: isDark ? AppColors.darkCard : AppColors.lightCard,
-    );
-  }
+
 
   Widget _buildWorkoutCard(WorkoutModel workout, bool isDark) {
     return GestureDetector(

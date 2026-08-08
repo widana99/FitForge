@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import '../../screens/notifications/notification_screen.dart';
 import '../../screens/home/recommendations_list_screen.dart';
 import '../../screens/home/focus_workout_screen.dart';
-import '../../screens/setup/user_type_screen.dart';
-import '../../screens/setup/equipment_setup_screen.dart';
+
 import '../../screens/onboarding/onboarding_screen.dart';
 import '../../screens/auth/login_screen.dart';
 import '../../screens/auth/register_screen.dart';
 import '../../screens/auth/forgot_password_screen.dart';
 import '../../screens/setup/workout_goal_screen.dart';
 import '../../screens/setup/training_level_screen.dart';
+import '../../screens/setup/fitness_test_screen.dart';
 import '../../screens/setup/schedule_setup_screen.dart';
 import '../../screens/setup/personal_data_screen.dart';
 import '../../screens/home/home_screen.dart';
@@ -31,8 +31,8 @@ class AppRoutes {
   static const String forgotPassword = '/forgot-password';
   static const String workoutGoal = '/setup/goal';
   static const String trainingLevel = '/setup/level';
-  static const String userType = '/setup/type';
-  static const String equipmentSetup = '/setup/equipment';
+  static const String fitnessTest = '/setup/fitness_test';
+
   static const String scheduleSetup = '/setup/schedule';
   static const String personalData = '/setup/personal';
   static const String main = '/main';
@@ -58,8 +58,8 @@ class AppRoutes {
       forgotPassword: (context) => const ForgotPasswordScreen(),
       workoutGoal: (context) => const WorkoutGoalScreen(),
       trainingLevel: (context) => const TrainingLevelScreen(),
-      userType: (context) => const UserTypeSelectionScreen(),
-      equipmentSetup: (context) => const EquipmentSelectionScreen(),
+      fitnessTest: (context) => const FitnessTestScreen(),
+
       scheduleSetup: (context) => const ScheduleSetupScreen(),
       personalData: (context) => const PersonalDataScreen(),
       main: (context) => const MainNavigation(),

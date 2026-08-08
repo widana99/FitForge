@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../config/theme/app_colors.dart';
 import '../../config/theme/app_text_styles.dart';
 import '../../config/theme/app_dimensions.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/firestore_service.dart';
+import '../../models/workout_history_model.dart';
+import 'package:intl/intl.dart';
 
 class WorkoutHistoryScreen extends StatefulWidget {
   const WorkoutHistoryScreen({super.key});
@@ -13,26 +18,11 @@ class WorkoutHistoryScreen extends StatefulWidget {
 class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
   String _filter = 'Semua';
 
-  final List<_HistoryItem> _history = [
-    _HistoryItem('Full Body Workout', DateTime.now().subtract(const Duration(hours: 3)),
-        32, 245, 5, 5, '💪'),
-    _HistoryItem('Upper Body', DateTime.now().subtract(const Duration(days: 1)),
-        45, 380, 4, 6, '🏋️'),
-    _HistoryItem('Core Training', DateTime.now().subtract(const Duration(days: 2)),
-        20, 180, 4, 4, '🧘'),
-    _HistoryItem('Leg Day', DateTime.now().subtract(const Duration(days: 3)),
-        50, 420, 5, 7, '🦵'),
-    _HistoryItem('HIIT Cardio', DateTime.now().subtract(const Duration(days: 5)),
-        25, 310, 5, 5, '🔥'),
-    _HistoryItem('Full Body Workout', DateTime.now().subtract(const Duration(days: 7)),
-        35, 280, 4, 5, '💪'),
-    _HistoryItem('Stretch & Recovery', DateTime.now().subtract(const Duration(days: 8)),
-        15, 80, 3, 4, '🧘'),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final auth = context.watch<AuthProvider>();
+    final user = auth.userModel;
 
     return Scaffold(
       appBar: AppBar(
@@ -90,13 +80,13 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildSummary('7', 'Sesi'),
+                  _buildSummary('${user?.totalWorkouts ?? 0}', 'Sesi'),
                   Container(width: 1, height: 30,
                       color: Colors.white.withValues(alpha: 0.3)),
-                  _buildSummary('222m', 'Durasi'),
+                  _buildSummary('${(user?.totalDuration ?? 0) ~/ 60}m', 'Durasi'),
                   Container(width: 1, height: 30,
                       color: Colors.white.withValues(alpha: 0.3)),
-                  _buildSummary('1,895', 'Kalori'),
+                  _buildSummary('${user?.totalCalories.toInt() ?? 0}', 'Kalori'),
                 ],
               ),
             ),
@@ -104,8 +94,27 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
 
           // History list
           Expanded(
-            child: _history.isEmpty
-                ? Center(
+            child: StreamBuilder<List<WorkoutHistoryModel>>(
+              stream: FirestoreService().workoutHistoryStream(user?.uid ?? ''),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                
+                var history = snapshot.data ?? [];
+                
+                // Apply Filter
+                final now = DateTime.now();
+                if (_filter == 'Minggu Ini') {
+                  final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+                  history = history.where((h) => h.date.isAfter(startOfWeek)).toList();
+                } else if (_filter == 'Bulan Ini') {
+                  final startOfMonth = DateTime(now.year, now.month, 1);
+                  history = history.where((h) => h.date.isAfter(startOfMonth)).toList();
+                }
+
+                if (history.isEmpty) {
+                  return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -118,17 +127,19 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
                                     : AppColors.textSecondaryLight)),
                       ],
                     ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppDimensions.xl),
-                    itemCount: _history.length,
-                    separatorBuilder: (_, __) =>
-                        const SizedBox(height: AppDimensions.md),
-                    itemBuilder: (context, index) {
-                      return _buildHistoryCard(_history[index], isDark);
-                    },
-                  ),
+                  );
+                }
+
+                return ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: AppDimensions.xl),
+                  itemCount: history.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: AppDimensions.md),
+                  itemBuilder: (context, index) {
+                    return _buildHistoryCard(history[index], isDark);
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -138,25 +149,25 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
   Widget _buildSummary(String value, String label) {
     return Column(
       children: [
-        Text(value,
-            style: AppTextStyles.h5(color: Colors.white)),
-        Text(label,
-            style: AppTextStyles.caption(
-                color: Colors.white.withValues(alpha: 0.7))),
+        Text(value, style: AppTextStyles.h5(color: Colors.white)),
+        Text(label, style: AppTextStyles.caption(color: Colors.white.withValues(alpha: 0.7))),
       ],
     );
   }
 
-  Widget _buildHistoryCard(_HistoryItem item, bool isDark) {
+  Widget _buildHistoryCard(WorkoutHistoryModel item, bool isDark) {
     final daysDiff = DateTime.now().difference(item.date).inDays;
     String dateText;
     if (daysDiff == 0) {
-      dateText = 'Hari ini';
+      dateText = 'Hari ini, ${DateFormat('HH:mm').format(item.date)}';
     } else if (daysDiff == 1) {
-      dateText = 'Kemarin';
+      dateText = 'Kemarin, ${DateFormat('HH:mm').format(item.date)}';
     } else {
-      dateText = '$daysDiff hari lalu';
+      dateText = DateFormat('dd MMM yyyy').format(item.date);
     }
+
+    // Default emoji
+    final emoji = item.workoutName.contains('Body') ? '💪' : '🏋️';
 
     return Container(
       padding: const EdgeInsets.all(AppDimensions.lg),
@@ -174,7 +185,7 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
               borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
             ),
             child: Center(
-              child: Text(item.emoji, style: const TextStyle(fontSize: 24)),
+              child: Text(emoji, style: const TextStyle(fontSize: 24)),
             ),
           ),
           const SizedBox(width: AppDimensions.md),
@@ -182,13 +193,13 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.name,
+                Text(item.workoutName,
                     style: AppTextStyles.labelMedium(
                         color: isDark
                             ? AppColors.textPrimaryDark
                             : AppColors.textPrimaryLight)),
                 const SizedBox(height: 4),
-                Text('${item.duration}min • ${item.calories}kal • ${item.exercises} gerakan',
+                Text('${item.duration ~/ 60}min • ${item.caloriesBurned.toInt()}kal • ${item.exercisesCompleted} gerakan',
                     style: AppTextStyles.bodySmall(
                         color: isDark
                             ? AppColors.textSecondaryDark
@@ -201,19 +212,6 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
                             color: isDark
                                 ? AppColors.textTertiaryDark
                                 : AppColors.textTertiaryLight)),
-                    const SizedBox(width: AppDimensions.sm),
-                    Row(
-                      children: List.generate(
-                        5,
-                        (i) => Icon(
-                          i < item.rating
-                              ? Icons.star_rounded
-                              : Icons.star_outline_rounded,
-                          size: 14,
-                          color: AppColors.warning,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ],
@@ -227,17 +225,4 @@ class _WorkoutHistoryScreenState extends State<WorkoutHistoryScreen> {
       ),
     );
   }
-}
-
-class _HistoryItem {
-  final String name;
-  final DateTime date;
-  final int duration;
-  final int calories;
-  final int rating;
-  final int exercises;
-  final String emoji;
-
-  _HistoryItem(this.name, this.date, this.duration, this.calories,
-      this.rating, this.exercises, this.emoji);
 }

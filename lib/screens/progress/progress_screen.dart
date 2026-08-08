@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../config/theme/app_colors.dart';
 import '../../config/theme/app_text_styles.dart';
 import '../../config/theme/app_dimensions.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/firestore_service.dart';
+import '../../models/workout_history_model.dart';
 
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({super.key});
@@ -29,6 +33,8 @@ class _ProgressScreenState extends State<ProgressScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final auth = context.watch<AuthProvider>();
+    final user = auth.userModel;
 
     return Scaffold(
       body: SafeArea(
@@ -82,120 +88,133 @@ class _ProgressScreenState extends State<ProgressScreen>
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppDimensions.xl,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Summary Cards
-                    Row(
+                child: StreamBuilder<List<WorkoutHistoryModel>>(
+                  stream: FirestoreService().workoutHistoryStream(user?.uid ?? ''),
+                  builder: (context, snapshot) {
+                    final history = snapshot.data ?? [];
+                    
+                    // Stats Calculation
+                    final totalWorkouts = user?.totalWorkouts ?? 0;
+                    final totalCalories = user?.totalCalories.toInt() ?? 0;
+                    final totalDurationMinutes = (user?.totalDuration ?? 0) / 60;
+                    final avgDuration = totalWorkouts > 0 ? (totalDurationMinutes / totalWorkouts).toInt() : 0;
+                    
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: _buildProgressCard(
-                            '12',
-                            'Latihan Selesai',
-                            Icons.fitness_center_rounded,
-                            AppColors.primary,
-                            isDark,
-                          ),
+                        // Summary Cards
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildProgressCard(
+                                '$totalWorkouts',
+                                'Latihan Selesai',
+                                Icons.fitness_center_rounded,
+                                AppColors.primary,
+                                isDark,
+                              ),
+                            ),
+                            const SizedBox(width: AppDimensions.md),
+                            Expanded(
+                              child: _buildProgressCard(
+                                '$totalCalories',
+                                'Kalori Terbakar',
+                                Icons.local_fire_department_rounded,
+                                AppColors.secondary,
+                                isDark,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: AppDimensions.md),
-                        Expanded(
-                          child: _buildProgressCard(
-                            '2,450',
-                            'Kalori Terbakar',
-                            Icons.local_fire_department_rounded,
-                            AppColors.secondary,
-                            isDark,
-                          ),
+                        const SizedBox(height: AppDimensions.md),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildProgressCard(
+                                '${(totalDurationMinutes / 60).toStringAsFixed(1)} jam',
+                                'Total Durasi',
+                                Icons.timer_outlined,
+                                AppColors.accent,
+                                isDark,
+                              ),
+                            ),
+                            const SizedBox(width: AppDimensions.md),
+                            Expanded(
+                              child: _buildProgressCard(
+                                '${avgDuration} min',
+                                'Rata-rata/Sesi',
+                                Icons.speed_outlined,
+                                AppColors.warning,
+                                isDark,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: AppDimensions.md),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildProgressCard(
-                            '5.2 jam',
-                            'Total Durasi',
-                            Icons.timer_outlined,
-                            AppColors.accent,
-                            isDark,
-                          ),
-                        ),
-                        const SizedBox(width: AppDimensions.md),
-                        Expanded(
-                          child: _buildProgressCard(
-                            '26 min',
-                            'Rata-rata/Sesi',
-                            Icons.speed_outlined,
-                            AppColors.warning,
-                            isDark,
-                          ),
-                        ),
-                      ],
-                    ),
 
-                    const SizedBox(height: AppDimensions.xxxl),
+                        const SizedBox(height: AppDimensions.xxxl),
 
-                    // Weight Chart Section
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
+                        // Weight Chart Section
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Berat Badan',
+                              style: AppTextStyles.h5(
+                                color: isDark
+                                    ? AppColors.textPrimaryDark
+                                    : AppColors.textPrimaryLight,
+                              ),
+                            ),
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.12),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.add,
+                                color: AppColors.primary,
+                                size: 20,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppDimensions.lg),
+                        _buildWeightChart(isDark),
+
+                        const SizedBox(height: AppDimensions.xxxl),
+
+                        // Streak Calendar
                         Text(
-                          'Berat Badan',
+                          'Kalender Latihan',
                           style: AppTextStyles.h5(
                             color: isDark
                                 ? AppColors.textPrimaryDark
                                 : AppColors.textPrimaryLight,
                           ),
                         ),
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.add,
-                            color: AppColors.primary,
-                            size: 20,
+                        const SizedBox(height: AppDimensions.lg),
+                        _buildStreakCalendar(isDark, history),
+
+                        const SizedBox(height: AppDimensions.xxxl),
+
+                        // Achievements
+                        Text(
+                          'Pencapaian',
+                          style: AppTextStyles.h5(
+                            color: isDark
+                                ? AppColors.textPrimaryDark
+                                : AppColors.textPrimaryLight,
                           ),
                         ),
+                        const SizedBox(height: AppDimensions.lg),
+                        _buildAchievements(isDark, totalWorkouts),
+
+                        const SizedBox(height: AppDimensions.xxxl),
                       ],
-                    ),
-                    const SizedBox(height: AppDimensions.lg),
-                    _buildWeightChart(isDark),
-
-                    const SizedBox(height: AppDimensions.xxxl),
-
-                    // Streak Calendar
-                    Text(
-                      'Kalender Latihan',
-                      style: AppTextStyles.h5(
-                        color: isDark
-                            ? AppColors.textPrimaryDark
-                            : AppColors.textPrimaryLight,
-                      ),
-                    ),
-                    const SizedBox(height: AppDimensions.lg),
-                    _buildStreakCalendar(isDark),
-
-                    const SizedBox(height: AppDimensions.xxxl),
-
-                    // Achievements
-                    Text(
-                      'Pencapaian',
-                      style: AppTextStyles.h5(
-                        color: isDark
-                            ? AppColors.textPrimaryDark
-                            : AppColors.textPrimaryLight,
-                      ),
-                    ),
-                    const SizedBox(height: AppDimensions.lg),
-                    _buildAchievements(isDark),
-
-                    const SizedBox(height: AppDimensions.xxxl),
-                  ],
+                    );
+                  }
                 ),
               ),
             ),
@@ -254,11 +273,11 @@ class _ProgressScreenState extends State<ProgressScreen>
   }
 
   Widget _buildWeightChart(bool isDark) {
+    // Weight chart remains dummy for now as per plan
     final weights = [67.0, 66.5, 66.0, 65.5, 65.8, 65.2, 65.0];
     final maxW = 68.0;
     final minW = 64.0;
-    final range = maxW - minW;
-
+    
     return Container(
       padding: const EdgeInsets.all(AppDimensions.xl),
       height: 180,
@@ -280,9 +299,18 @@ class _ProgressScreenState extends State<ProgressScreen>
     );
   }
 
-  Widget _buildStreakCalendar(bool isDark) {
-    // Demo: show 28 days (4 weeks)
-    final workoutDays = {1, 3, 5, 8, 10, 12, 15, 17, 19, 22, 24, 26};
+  Widget _buildStreakCalendar(bool isDark, List<WorkoutHistoryModel> history) {
+    final now = DateTime.now();
+    // Get past 28 days for the calendar
+    final startDate = now.subtract(const Duration(days: 27));
+    
+    // Extract unique active days
+    final Set<String> activeDays = {};
+    for (var h in history) {
+      if (h.date.isAfter(startDate.subtract(const Duration(days: 1)))) {
+         activeDays.add('${h.date.year}-${h.date.month}-${h.date.day}');
+      }
+    }
 
     return Container(
       padding: const EdgeInsets.all(AppDimensions.lg),
@@ -300,8 +328,10 @@ class _ProgressScreenState extends State<ProgressScreen>
         ),
         itemCount: 28,
         itemBuilder: (context, index) {
-          final day = index + 1;
-          final isWorkout = workoutDays.contains(day);
+          final currentDate = startDate.add(Duration(days: index));
+          final dateKey = '${currentDate.year}-${currentDate.month}-${currentDate.day}';
+          final isWorkout = activeDays.contains(dateKey);
+          
           return Container(
             decoration: BoxDecoration(
               color: isWorkout
@@ -313,7 +343,7 @@ class _ProgressScreenState extends State<ProgressScreen>
             ),
             child: Center(
               child: Text(
-                '$day',
+                '${currentDate.day}',
                 style: AppTextStyles.caption(
                   color: isWorkout
                       ? Colors.white
@@ -329,14 +359,14 @@ class _ProgressScreenState extends State<ProgressScreen>
     );
   }
 
-  Widget _buildAchievements(bool isDark) {
+  Widget _buildAchievements(bool isDark, int totalWorkouts) {
     final achievements = [
-      ('🥇', 'Latihan Pertama', true),
-      ('🔥', 'Streak 7 Hari', true),
-      ('💪', '10 Latihan', true),
-      ('🏆', '30 Hari', false),
-      ('⚡', '50 Latihan', false),
-      ('🎯', '100 Latihan', false),
+      ('🥇', 'Latihan Pertama', totalWorkouts >= 1),
+      ('🔥', 'Streak 7 Hari', totalWorkouts >= 7),
+      ('💪', '10 Latihan', totalWorkouts >= 10),
+      ('🏆', '30 Latihan', totalWorkouts >= 30),
+      ('⚡', '50 Latihan', totalWorkouts >= 50),
+      ('🎯', '100 Latihan', totalWorkouts >= 100),
     ];
 
     return SizedBox(

@@ -48,18 +48,16 @@ class _HomeScreenState extends State<HomeScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final featuredWorkout = WorkoutPresets.getRecommendation(
-      user.workoutGoal ?? 'muscle_building',
-      user.trainingLevel ?? 'beginner',
-      user.hasEquipment,
-    );
-
-    // Get strictly tailored related workouts
-    final suggestions = WorkoutPresets.getRelatedRecommendations(
-      user.workoutGoal ?? 'muscle_building',
-      user.trainingLevel ?? 'beginner',
-      user.hasEquipment,
-    );
+    final homeDataFuture = Future.wait([
+      WorkoutPresets.getRecommendation(
+        user.workoutGoal ?? 'muscle_building',
+        user.trainingLevel ?? 'beginner',
+      ),
+      WorkoutPresets.getRelatedRecommendations(
+        user.workoutGoal ?? 'muscle_building',
+        user.trainingLevel ?? 'beginner',
+      ),
+    ]);
 
     return Scaffold(
       body: SafeArea(
@@ -79,27 +77,52 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: AppDimensions.xxxl),
 
-              Text("Latihan Hari Ini", style: AppTextStyles.h4(color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight)),
-              const SizedBox(height: AppDimensions.lg),
-              _buildFeaturedCard(featuredWorkout, isDark),
-              
-              const SizedBox(height: AppDimensions.xxxl),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("Rekomendasi Untukmu", style: AppTextStyles.h5(color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight)),
-                  TextButton(
-                    onPressed: () => Navigator.pushNamed(
-                      context, 
-                      AppRoutes.recommendationsList,
-                      arguments: suggestions,
-                    ),
-                    child: const Text('Lihat Semua'),
-                  ),
-                ],
+              FutureBuilder<List<dynamic>>(
+                future: homeDataFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  if (snapshot.hasError || !snapshot.hasData) {
+                    return const SizedBox();
+                  }
+
+                  final WorkoutModel featuredWorkout = snapshot.data![0];
+                  final List<WorkoutModel> suggestions = snapshot.data![1];
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Latihan Hari Ini", style: AppTextStyles.h4(color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight)),
+                      const SizedBox(height: AppDimensions.lg),
+                      _buildFeaturedCard(featuredWorkout, isDark),
+                      
+                      const SizedBox(height: AppDimensions.xxxl),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text("Rekomendasi Untukmu", style: AppTextStyles.h5(color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight)),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pushNamed(
+                              context, 
+                              AppRoutes.recommendationsList,
+                              arguments: suggestions,
+                            ),
+                            child: const Text('Lihat Semua'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppDimensions.lg),
+                      _buildHorizontalRecommendations(suggestions, isDark),
+                    ],
+                  );
+                },
               ),
-              const SizedBox(height: AppDimensions.lg),
-              _buildHorizontalRecommendations(suggestions, isDark),
               
               const SizedBox(height: AppDimensions.xxxl),
               Text("Kategori Tujuan", style: AppTextStyles.h4(color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight)),

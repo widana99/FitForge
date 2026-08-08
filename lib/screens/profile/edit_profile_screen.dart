@@ -12,8 +12,7 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  bool _hasEquipment = false;
-  String _flowPreference = 'guided';
+
   final _nameController = TextEditingController();
   final _weightController = TextEditingController();
   final _heightController = TextEditingController();
@@ -26,8 +25,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _nameController.text = user.name;
       _weightController.text = user.weight?.toStringAsFixed(0) ?? '';
       _heightController.text = user.height?.toStringAsFixed(0) ?? '';
-      _hasEquipment = user.hasEquipment;
-      _flowPreference = user.flowPreference;
+
     }
   }
 
@@ -56,8 +54,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       'name': name,
       'weight': weight,
       'height': height,
-      'hasEquipment': _hasEquipment,
-      'flowPreference': _flowPreference,
+
     });
 
     if (auth.error == null && mounted) {
@@ -189,32 +186,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
             ),
             const SizedBox(height: AppDimensions.xl),
-            const SizedBox(height: AppDimensions.xl),
-            DropdownButtonFormField<String>(
-              value: _flowPreference,
-              decoration: const InputDecoration(
-                labelText: 'Gaya App (Flow)',
-                prefixIcon: Icon(Icons.style_outlined),
-              ),
-              items: const [
-                DropdownMenuItem(value: 'guided', child: Text('User Awam (Terpandu)')),
-                DropdownMenuItem(value: 'efficient', child: Text('User Terbiasa (Efisien)')),
-              ],
-              onChanged: (val) => setState(() => _flowPreference = val!),
-            ),
-            const SizedBox(height: AppDimensions.lg),
-            SwitchListTile(
-              title: const Text('Memiliki Alat Latihan'),
-              subtitle: const Text('Dumbbell, Pull-up bar, resistance band, dsb.'),
-              value: _hasEquipment,
-              onChanged: (val) => setState(() => _hasEquipment = val),
-              secondary: Icon(
-                _hasEquipment ? Icons.fitness_center_rounded : Icons.do_not_disturb_rounded,
-                color: _hasEquipment ? AppColors.primary : AppColors.textSecondaryLight,
-              ),
-              contentPadding: EdgeInsets.zero,
-              activeColor: AppColors.primary,
-            ),
+
             if (auth.error != null) ...[
               const SizedBox(height: AppDimensions.lg),
               Text(

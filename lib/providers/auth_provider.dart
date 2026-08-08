@@ -63,9 +63,18 @@ class AuthProvider extends ChangeNotifier {
       await _authService.signInWithEmail(email: email, password: password);
       _error = null;
     } on FirebaseAuthException catch (e) {
+      debugPrint('FirebaseAuthException during signIn: ${e.code} - ${e.message}');
       _error = _getAuthErrorMessage(e.code);
+    } on FirebaseException catch (e) {
+      debugPrint('FirebaseException during signIn: ${e.code} - ${e.message}');
+      if (e.code == 'permission-denied') {
+        _error = 'Akses Firestore ditolak. Periksa Rules di Firebase Console.';
+      } else {
+        _error = 'Kesalahan database (${e.code}): ${e.message}';
+      }
     } catch (e) {
-      _error = 'Terjadi kesalahan. Silakan coba lagi.';
+      debugPrint('Unknown error during signIn: $e');
+      _error = 'Terjadi kesalahan: ${e.toString()}';
     }
     _setLoading(false);
   }
@@ -84,9 +93,18 @@ class AuthProvider extends ChangeNotifier {
       );
       _error = null;
     } on FirebaseAuthException catch (e) {
+      debugPrint('FirebaseAuthException during signUp: ${e.code} - ${e.message}');
       _error = _getAuthErrorMessage(e.code);
+    } on FirebaseException catch (e) {
+      debugPrint('FirebaseException during signUp: ${e.code} - ${e.message}');
+      if (e.code == 'permission-denied') {
+        _error = 'Akses Firestore ditolak. Periksa Security Rules di Firebase Console.';
+      } else {
+        _error = 'Kesalahan database (${e.code}): ${e.message}';
+      }
     } catch (e) {
-      _error = 'Terjadi kesalahan. Silakan coba lagi.';
+      debugPrint('Unknown error during signUp: $e');
+      _error = 'Terjadi kesalahan: ${e.toString()}';
     }
     _setLoading(false);
   }
@@ -97,6 +115,16 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _authService.signInWithGoogle();
       _error = null;
+    } on FirebaseAuthException catch (e) {
+      debugPrint('Google Sign-In FirebaseAuthException: ${e.code} - ${e.message}');
+      _error = _getAuthErrorMessage(e.code);
+    } on FirebaseException catch (e) {
+      debugPrint('Google Sign-In FirebaseException: ${e.code} - ${e.message}');
+      if (e.code == 'permission-denied') {
+        _error = 'Akses Firestore ditolak. Periksa Security Rules di Firebase Console.';
+      } else {
+        _error = 'Kesalahan database (${e.code}): ${e.message}';
+      }
     } catch (e) {
       debugPrint('Google Sign-In Error: $e');
       _error = 'Gagal masuk dengan Google: ${e.toString()}';
@@ -169,17 +197,22 @@ class AuthProvider extends ChangeNotifier {
       case 'user-not-found':
         return 'Email tidak terdaftar.';
       case 'wrong-password':
-        return 'Password salah.';
+      case 'invalid-credential':
+        return 'Email atau password salah.';
       case 'email-already-in-use':
-        return 'Email sudah digunakan.';
+        return 'Email sudah digunakan oleh akun lain.';
       case 'weak-password':
-        return 'Password terlalu lemah.';
+        return 'Password terlalu lemah (minimal 6 karakter).';
       case 'invalid-email':
         return 'Format email tidak valid.';
       case 'too-many-requests':
         return 'Terlalu banyak percobaan. Coba lagi nanti.';
+      case 'operation-not-allowed':
+        return 'Metode login/daftar ini belum diaktifkan di Firebase Console.';
+      case 'network-request-failed':
+        return 'Gagal terhubung ke jaringan/internet.';
       default:
-        return 'Terjadi kesalahan. Silakan coba lagi.';
+        return 'Terjadi kesalahan ($code). Silakan coba lagi.';
     }
   }
 }

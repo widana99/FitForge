@@ -1,73 +1,49 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class ExerciseModel {
   final String id;
   final String name;
+  final String targetMuscle;
+  final String level;
+  final String type;
+  final int duration;
   final String description;
-  final String muscleGroup;
-  final String difficulty;
-  final String videoUrl;
-  final String thumbnailUrl;
-  final int duration; // seconds, 0 if rep-based
-  final int reps; // 0 if time-based
-  final int sets;
-  final List<String> tips;
-  final List<String> equipment;
+  final List<Map<String, String>> youtubeVideos;
   final DateTime createdAt;
 
   ExerciseModel({
     required this.id,
     required this.name,
+    required this.targetMuscle,
+    required this.level,
+    required this.type,
+    required this.duration,
     required this.description,
-    required this.muscleGroup,
-    required this.difficulty,
-    required this.videoUrl,
-    required this.thumbnailUrl,
-    this.duration = 0,
-    this.reps = 0,
-    this.sets = 3,
-    this.tips = const [],
-    this.equipment = const [],
+    this.youtubeVideos = const [],
     required this.createdAt,
   });
 
-  bool get isTimeBased => duration > 0;
-  bool get isRepBased => reps > 0;
-
-  factory ExerciseModel.fromMap(Map<String, dynamic> map, String id) {
-    return ExerciseModel(
-      id: id,
-      name: map['name'] ?? '',
-      description: map['description'] ?? '',
-      muscleGroup: map['muscleGroup'] ?? '',
-      difficulty: map['difficulty'] ?? 'beginner',
-      videoUrl: map['videoUrl'] ?? '',
-      thumbnailUrl: map['thumbnailUrl'] ?? '',
-      duration: map['duration'] ?? 0,
-      reps: map['reps'] ?? 0,
-      sets: map['sets'] ?? 3,
-      tips: List<String>.from(map['tips'] ?? []),
-      equipment: List<String>.from(map['equipment'] ?? []),
-      createdAt: map['createdAt'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(
-              map['createdAt'].millisecondsSinceEpoch,
-            )
-          : DateTime.now(),
-    );
+  factory ExerciseModel.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    return ExerciseModel.fromMap(data, doc.id);
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'name': name,
-      'description': description,
-      'muscleGroup': muscleGroup,
-      'difficulty': difficulty,
-      'videoUrl': videoUrl,
-      'thumbnailUrl': thumbnailUrl,
-      'duration': duration,
-      'reps': reps,
-      'sets': sets,
-      'tips': tips,
-      'equipment': equipment,
-      'createdAt': createdAt,
-    };
+  factory ExerciseModel.fromMap(Map<String, dynamic> data, String docId) {
+    return ExerciseModel(
+      id: docId,
+      name: data['name'] ?? '',
+      targetMuscle: data['targetMuscle'] ?? '',
+      level: data['level'] ?? 'Pemula',
+      type: data['type'] ?? 'Repetisi',
+      duration: (data['duration'] ?? 0).toInt(),
+      description: data['description'] ?? '',
+      youtubeVideos: (data['youtubeVideos'] as List<dynamic>?)
+              ?.map((item) => Map<String, String>.from(item as Map))
+              .toList() ??
+          [],
+      createdAt: data['createdAt'] != null 
+          ? (data['createdAt'] as Timestamp).toDate() 
+          : DateTime.now(),
+    );
   }
 }

@@ -52,7 +52,7 @@ class _TrainingLevelScreenState extends State<TrainingLevelScreen> {
         'trainingLevel': _selectedLevel,
       });
       if (mounted) {
-        Navigator.pushNamed(context, AppRoutes.userType);
+        Navigator.pushNamed(context, AppRoutes.scheduleSetup);
       }
     }
   }

@@ -1,10 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/workout_model.dart';
-import 'dart:math';
-
-// Mengimpor database modular yang sangat ekstensif dan tersertifikasi.
-import 'data/upper_body_db.dart';
-import 'data/core_glutes_db.dart';
-import 'data/lower_full_db.dart';
 
 class WorkoutPresets {
   static final List<String> motivationQuotes = [
@@ -19,44 +14,41 @@ class WorkoutPresets {
   static const String yogaImg = 'yoga_workout_thumb_1775675252378.png';
   static const String strengthImg = 'strength_workout_thumb_1775675353599.png';
 
-  // ==========================================
-  // DATABASE GERAKAN GABUNGAN MODULAR (100% BEBAS BLEEDING)
-  // Menyerap 3 file raksasa untuk performa memori optimal.
-  // ==========================================
-  static final Map<String, Map<String, dynamic>> exerciseDB = {
-    ...upperBodyDB,
-    ...coreGluteDB,
-    ...lowerFullDB,
-  };
+  static String stringImg(String s) => strengthImg;
 
-  static String stringImg(String s) => strengthImg; // fallback
-
-  static WorkoutModel getRecommendation(String goal, String level, bool hasEquipment) {
-    return getRelatedRecommendations(goal, level, hasEquipment).first;
+  static Future<WorkoutModel> getRecommendation(String goal, String level) async {
+    final recommendations = await getRelatedRecommendations(goal, level);
+    return recommendations.first;
   }
 
   // ==========================================
-  // GENERATOR REKOMENDASI TERKAIT (DINAMIS HOMESCREEN)
+  // GENERATOR REKOMENDASI TERKAIT
   // ==========================================
-  static List<WorkoutModel> getRelatedRecommendations(String goal, String level, bool hasEquipment) {
+  static Future<List<WorkoutModel>> getRelatedRecommendations(String goal, String level) async {
     if (goal == 'fat_loss') {
+      final absList = await getWorkoutsByFocus('Otot Perut', level);
+      final fullList = await getWorkoutsByFocus('Seluruh Tubuh', level);
       return [
-        getWorkoutsByFocus('Otot Perut', level, hasEquipment).first,
-        getWorkoutsByFocus('Seluruh Tubuh', level, hasEquipment).last,
+        absList.first,
+        fullList.last,
       ];
     } else if (goal == 'muscle_building') {
+      final armsList = await getWorkoutsByFocus('Lengan', level);
+      final glutesList = await getWorkoutsByFocus('Bokong/Pinggul', level);
       return [
-        getWorkoutsByFocus('Lengan', level, hasEquipment).first,
-        getWorkoutsByFocus('Bokong/Pinggul', level, hasEquipment).first,
+        armsList.first,
+        glutesList.first,
       ];
     }
+    
+    final fullList = await getWorkoutsByFocus('Seluruh Tubuh', level);
+    final legsList = await getWorkoutsByFocus('Kaki', level);
     return [
-       getWorkoutsByFocus('Seluruh Tubuh', level, hasEquipment).first,
-       getWorkoutsByFocus('Kaki', level, hasEquipment).last,
+       fullList.first,
+       legsList.last,
     ];
   }
 
-  // Fungsi helper konstruktor
   static WorkoutModel _createCustomModel(String name, String desc, String goal, String level, int dur, int cal, String thumb, List<WorkoutExercise> ex) {
     return WorkoutModel(
       id: 'gen_${name.hashCode}',
@@ -73,59 +65,58 @@ class WorkoutPresets {
   }
 
   // ==========================================
-  // ALGORITMA FOKUS TUBUH (STRICT NO-BLEEDING ALGORITHM)
+  // ALGORITMA FOKUS TUBUH (FIRESTORE)
   // ==========================================
-  static List<WorkoutModel> getWorkoutsByFocus(String focusStr, String level, bool hasEquipment) {
+  static Future<List<WorkoutModel>> getWorkoutsByFocus(String focusStr, String level) async {
     List<String> targetTags = [];
-    if (focusStr == 'Seluruh Tubuh') targetTags = ['Seluruh Tubuh'];
-    else if (focusStr == 'Otot Perut') targetTags = ['Perut'];
-    else if (focusStr == 'Bokong/Pinggul') targetTags = ['Bokong'];
-    else if (focusStr == 'Lengan') targetTags = ['Lengan', 'Bahu'];
-    else if (focusStr == 'Kaki') targetTags = ['Kaki'];
+    if (focusStr == 'Seluruh Tubuh') targetTags = ['Seluruh Tubuh', 'Kardiovaskular'];
+    else if (focusStr == 'Otot Perut') targetTags = ['Perut', 'Inti', 'Abdomen'];
+    else if (focusStr == 'Bokong/Pinggul') targetTags = ['Bokong', 'Pinggul', 'Gluteus'];
+    else if (focusStr == 'Lengan') targetTags = ['Lengan', 'Bahu', 'Pektoral'];
+    else if (focusStr == 'Kaki') targetTags = ['Kaki', 'Quadrisep', 'Hamstring'];
     else targetTags = ['Seluruh Tubuh'];
 
-    String strEquip = hasEquipment ? 'Alat' : 'Tanpa Alat';
     String strLevel = level == 'beginner' ? 'Pemula' : (level == 'intermediate' ? 'Menengah' : 'Mahir');
     
-    // 2. Kumpulkan exercises mutlak ketat dari DB Gabungan
+    // 1. Ambil semua data gerakan dari Firestore
+    final snapshot = await FirebaseFirestore.instance.collection('exercises').get();
+    
+    // 2. Filter data secara lokal
     List<WorkoutExercise> matchedExercises = [];
-    exerciseDB.forEach((id, data) {
-      List<String> tags = List<String>.from(data['tags']);
+    
+    for (var doc in snapshot.docs) {
+      final data = doc.data();
+      final targetMuscle = (data['targetMuscle'] ?? '').toString();
+      final exerciseLevel = (data['level'] ?? '').toString();
+      final name = (data['name'] ?? '').toString();
+      final type = (data['type'] ?? '').toString();
       
-      bool matchesFocus = targetTags.any((t) => tags.contains(t));
-      bool matchesEquip = tags.contains(strEquip); // WAJIB alat benar
-      bool matchesLevel = tags.contains(strLevel); // WAJIB tier level benar
+      bool matchesFocus = targetTags.any((t) => targetMuscle.contains(t));
+      bool matchesLevel = exerciseLevel.contains(strLevel);
       
-      if (matchesFocus && matchesEquip && matchesLevel) {
-        int finalDuration = 0;
+      if (matchesFocus && matchesLevel) {
+        int finalDuration = level == 'beginner' ? 30 : (level == 'intermediate' ? 45 : 60);
         int finalReps = 0;
-        
-        if (!hasEquipment) {
-            // TIME-BASED for Bodyweight
-            finalDuration = level == 'beginner' ? 30 : (level == 'intermediate' ? 45 : 60);
-            finalReps = 0; // UI will use timer
-        } else {
-            // REP-RANGE for Equipment
-            finalReps = level == 'beginner' ? 12 : 15;
-            finalDuration = 0;
-        }
 
-        // Special override for planks
-        if (data['name'].toLowerCase().contains('plank') || data['name'].toLowerCase().contains('hold')) {
+        // Cek tipe: Waktu vs Repetisi
+        if (type == 'Waktu' || name.toLowerCase().contains('plank') || name.toLowerCase().contains('hold')) {
             finalDuration = 45;
             finalReps = 0;
+        } else {
+            finalReps = (data['duration'] ?? 12).toInt();
+            finalDuration = 0; // durasi 0 jika repetisi
         }
 
         matchedExercises.add(WorkoutExercise(
-          exerciseId: id,
-          exerciseName: data['name'],
+          exerciseId: doc.id,
+          exerciseName: name,
           sets: level == 'beginner' ? 3 : (level == 'intermediate' ? 4 : 5),
           reps: finalReps,
           duration: finalDuration,
           restTime: level == 'beginner' ? 30 : 20,
         ));
       }
-    });
+    }
 
     final list = <WorkoutModel>[];
     matchedExercises.shuffle();
@@ -133,103 +124,96 @@ class WorkoutPresets {
     if (matchedExercises.length >= 6) {
       int half = matchedExercises.length ~/ 2;
       list.add(_createCustomModel(
-        'Intensif $focusStr A (${hasEquipment ? "Alat" : "Beban Badan"})', 
-        'Repertoar hipertrofi sudut otot variatif kelas eksekutif medis.', 
+        'Intensif $focusStr A', 
+        'Repertoar hipertrofi sudut otot variatif.', 
         'focus', level, 12 + half * 2, 120 + half * 20, strengthImg, 
         matchedExercises.sublist(0, half)
       ));
       list.add(_createCustomModel(
-        'Intensif $focusStr B (${hasEquipment ? "Alat" : "Beban Badan"})', 
-        'Perputaran rotasi baru khusus menjangkau stimulasi serat otot tak terduga.', 
+        'Intensif $focusStr B', 
+        'Stimulasi serat otot tak terduga.', 
         'focus', level, 12 + half * 2, 120 + half * 20, yogaImg, 
         matchedExercises.sublist(half)
       ));
     } else {
       list.add(_createCustomModel(
         'Fokus Utama: $focusStr', 
-        'Konsumsi target terfokus memecah massa $focusStr spesifik bersama Pro Guide.', 
+        'Konsumsi target terfokus area $focusStr spesifik bersama Pro Guide.', 
         'focus', level, 10 + matchedExercises.length * 3, 100 + matchedExercises.length * 25, featuredImg, 
         matchedExercises
       ));
     }
 
-    // Hindari mengembalikan list kosong (fallback total safety-net)
+    // Hindari mengembalikan list kosong (fallback)
     if (list.isEmpty) {
-        list.add(_createCustomModel('Kebugaran Basis $focusStr', 'Paket transisi aman bagi persendian.', 'focus', level, 15, 100, featuredImg, [WorkoutExercise(exerciseId: 'plank', exerciseName: 'Plank Fungsional', sets: 3, reps: 0, duration: 45, restTime: 30)]));
+        list.add(_createCustomModel('Kebugaran Basis $focusStr', 'Paket transisi aman.', 'focus', level, 15, 100, featuredImg, [WorkoutExercise(exerciseId: 'plank', exerciseName: 'Plank Fungsional', sets: 3, reps: 0, duration: 45, restTime: 30)]));
     }
 
     return list;
   }
 
   // ==========================================
-  // ALGORITMA TUBUH BERBASIS GOALS (METODOLOGI)
+  // ALGORITMA TUBUH BERBASIS GOALS (FIRESTORE)
   // ==========================================
-  static List<WorkoutModel> getWorkoutsByGoal(String goalKey, String level, bool hasEquipment) {
+  static Future<List<WorkoutModel>> getWorkoutsByGoal(String goalKey, String level) async {
     List<String> targetTags = [];
     int baseSets = 3;
-    int baseReps = 12;
     int restTime = 30;
     
     if (goalKey == 'fat_loss') {
-      targetTags = ['Perut', 'Seluruh Tubuh', 'Kaki'];
+      targetTags = ['Perut', 'Inti', 'Kaki', 'Quadrisep', 'Hamstring', 'Kardiovaskular'];
       baseSets = level == 'beginner' ? 3 : 4;
-      baseReps = level == 'beginner' ? 15 : 20; // High reps for cardio
-      restTime = 15; // 15 SECONDS! True HIIT
+      restTime = 15; // True HIIT
     } else if (goalKey == 'muscle_building') {
-      targetTags = ['Lengan', 'Bahu', 'Bokong', 'Dada'];
-      baseSets = level == 'beginner' ? 4 : 5; // Extra volume
-      baseReps = level == 'beginner' ? 10 : 8; // Heavy weight, low reps
-      restTime = 60; // 60 SECONDS! True hypertrophy rest
+      targetTags = ['Lengan', 'Bahu', 'Pektoral', 'Bokong', 'Dada'];
+      baseSets = level == 'beginner' ? 4 : 5; 
+      restTime = 60; // Hypertrophy rest
     } else {
-      // General Fitness
-      targetTags = ['Seluruh Tubuh', 'Perut', 'Lengan', 'Kaki'];
+      targetTags = ['Perut', 'Lengan', 'Kaki', 'Quadrisep', 'Pektoral'];
       baseSets = level == 'beginner' ? 3 : 4;
-      baseReps = 12;
-      restTime = 30; // standard rest
+      restTime = 30; 
     }
 
-    String strEquip = hasEquipment ? 'Alat' : 'Tanpa Alat';
     String strLevel = level == 'beginner' ? 'Pemula' : (level == 'intermediate' ? 'Menengah' : 'Mahir');
     
+    final snapshot = await FirebaseFirestore.instance.collection('exercises').get();
+    
     List<WorkoutExercise> matchedExercises = [];
-    exerciseDB.forEach((id, data) {
-      List<String> tags = List<String>.from(data['tags']);
-      bool matchesFocus = targetTags.any((t) => tags.contains(t));
-      bool matchesEquip = tags.contains(strEquip);
-      bool matchesLevel = tags.contains(strLevel);
+    
+    for (var doc in snapshot.docs) {
+      final data = doc.data();
+      final targetMuscle = (data['targetMuscle'] ?? '').toString();
+      final exerciseLevel = (data['level'] ?? '').toString();
+      final type = (data['type'] ?? '').toString();
+      final name = (data['name'] ?? '').toString();
       
-      if (matchesFocus && matchesEquip && matchesLevel) {
-        int finalDuration = 0;
+      bool matchesFocus = targetTags.any((t) => targetMuscle.contains(t));
+      bool matchesLevel = exerciseLevel.contains(strLevel);
+      
+      if (matchesFocus && matchesLevel) {
+        int finalDuration = goalKey == 'fat_loss' ? 30 : (goalKey == 'muscle_building' ? 60 : 45);
         int finalReps = 0;
 
-        if (!hasEquipment) {
-            // TIME-BASED: Fat loss = fast, Muscle = max effort
-            finalDuration = goalKey == 'fat_loss' ? 30 : (goalKey == 'muscle_building' ? 60 : 45);
+        if (type == 'Waktu' || name.toLowerCase().contains('plank') || name.toLowerCase().contains('hold')) {
+            finalDuration = 60;
             finalReps = 0;
         } else {
-            // RANGE-REPS
-            finalReps = baseReps;
+            finalReps = (data['duration'] ?? 12).toInt();
             finalDuration = 0;
         }
 
-        if (data['name'].toLowerCase().contains('plank') || data['name'].toLowerCase().contains('hold')) {
-            finalDuration = 60;
-            finalReps = 0;
-        }
-
         matchedExercises.add(WorkoutExercise(
-          exerciseId: id,
-          exerciseName: data['name'],
+          exerciseId: doc.id,
+          exerciseName: name,
           sets: baseSets,
           reps: finalReps,
           duration: finalDuration,
           restTime: restTime,
         ));
       }
-    });
+    }
 
     matchedExercises.shuffle();
-    // Potong agar tidak kelamaan (max 7 exercise untuk goal)
     if (matchedExercises.length > 7) {
       matchedExercises = matchedExercises.sublist(0, 7);
     }
@@ -239,7 +223,7 @@ class WorkoutPresets {
 
     int totalEstimatedSeconds = 0;
     for (var ex in matchedExercises) {
-      int timePerSet = ex.duration > 0 ? ex.duration : (ex.reps * 3); // Asumsi 3 detik per repetisi
+      int timePerSet = ex.duration > 0 ? ex.duration : (ex.reps * 3); 
       totalEstimatedSeconds += (timePerSet + ex.restTime) * ex.sets;
     }
     int estimatedMinutes = (totalEstimatedSeconds / 60).ceil();
@@ -257,10 +241,9 @@ class WorkoutPresets {
         matchedExercises
       ));
     } else {
-      list.add(_createCustomModel('Kebugaran Basis', 'Paket transisi aman bagi persendian.', goalKey, level, 15, 100, featuredImg, [WorkoutExercise(exerciseId: 'plank', exerciseName: 'Plank Fungsional', sets: 3, reps: 0, duration: 45, restTime: 30)]));
+      list.add(_createCustomModel('Kebugaran Basis', 'Paket transisi aman.', goalKey, level, 15, 100, featuredImg, [WorkoutExercise(exerciseId: 'plank', exerciseName: 'Plank Fungsional', sets: 3, reps: 0, duration: 45, restTime: 30)]));
     }
 
     return list;
   }
 }
-

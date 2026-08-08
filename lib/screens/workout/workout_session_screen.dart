@@ -7,6 +7,7 @@ import '../../config/theme/app_dimensions.dart';
 import '../../models/workout_model.dart';
 import '../../models/workout_history_model.dart';
 import '../../services/firestore_service.dart';
+import '../../services/audio_coaching_service.dart';
 import '../../providers/auth_provider.dart';
 import 'package:flutter/services.dart';
 
@@ -41,6 +42,10 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
   late String _workoutName;
   late String _workoutEmoji;
 
+  // Audio Coaching Service - Requirements: 6.1
+  late AudioCoachingService _audioCoaching;
+  bool _audioEnabled = true;
+
   @override
   void initState() {
     super.initState();
@@ -53,6 +58,17 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
     );
 
     _initializeData();
+    _initializeAudioCoaching();
+  }
+
+  /// Initialize AudioCoachingService - Requirements: 6.1
+  Future<void> _initializeAudioCoaching() async {
+    _audioCoaching = AudioCoachingService();
+    await _audioCoaching.initialize();
+    // Update audio enabled state based on initialization success
+    setState(() {
+      _audioEnabled = _audioCoaching.isEnabled;
+    });
   }
 
   void _initializeData() {
@@ -102,6 +118,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
   void dispose() {
     _timer?.cancel();
     _pulseController.dispose();
+    _audioCoaching.dispose(); // Requirements: 6.3
     super.dispose();
   }
 
@@ -111,6 +128,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
     if (ex.duration > 0) {
       _timeLeft = ex.duration;
     }
+    // Audio: Announce first exercise
+    _audioCoaching.speakExerciseStart(ex.exerciseId, ex.exerciseName);
     _startTimer();
   }
 
@@ -124,31 +143,46 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
           if (_resting) {
             _restTime--;
 
-            // Haptic Feedback for Rest Time
-            if (_restTime > 0 && _restTime <= 3) {
+            // Enhanced Haptic: Graduated pattern (3=light, 2=medium, 1=heavy)
+            if (_restTime == 3) {
               HapticFeedback.lightImpact();
+              _audioCoaching.speakRestCountdown();
+            } else if (_restTime == 2) {
+              HapticFeedback.mediumImpact();
+            } else if (_restTime == 1) {
+              HapticFeedback.heavyImpact();
             } else if (_restTime == 0) {
-              HapticFeedback.vibrate();
+              _playDoubleBurstHaptic();
             }
 
             if (_restTime <= 0) {
               _resting = false;
               _timer?.cancel();
               if (_isTransitioning) {
-                 _isTransitioning = false;
-                 _nextExercise();
+                _isTransitioning = false;
+                _nextExercise();
               } else {
-                 _nextSet();
+                _nextSet();
               }
             }
           } else if (_exercises[_currentExercise].duration > 0) {
             _timeLeft--;
 
-            // Haptic Feedback for Work Time
-            if (_timeLeft > 0 && _timeLeft <= 3) {
+            // Audio: Mid-cue at 50% of exercise duration
+            final ex = _exercises[_currentExercise];
+            if (ex.duration > 0 && _timeLeft == (ex.duration ~/ 2)) {
+              _audioCoaching.speakExerciseMid(ex.exerciseId);
+            }
+
+            // Enhanced Haptic: Graduated pattern for work timer
+            if (_timeLeft == 3) {
+              HapticFeedback.lightImpact();
+            } else if (_timeLeft == 2) {
+              HapticFeedback.mediumImpact();
+            } else if (_timeLeft == 1) {
               HapticFeedback.heavyImpact();
             } else if (_timeLeft == 0) {
-              HapticFeedback.vibrate();
+              HapticFeedback.heavyImpact();
             }
 
             if (_timeLeft <= 0) {
@@ -164,6 +198,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
   void _onSetComplete() {
     final ex = _exercises[_currentExercise];
     if (_currentSet < ex.sets) {
+      // Audio: Rest between sets
+      _audioCoaching.speakRestStart();
       setState(() {
         _resting = true;
         _restTime = ex.restTime > 0 ? ex.restTime : 15;
@@ -171,6 +207,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
       _startTimer();
     } else {
       if (_currentExercise < _exercises.length - 1) {
+        // Audio: Transition to next exercise
+        final nextEx = _exercises[_currentExercise + 1];
+        _audioCoaching.speakTransition(nextEx.exerciseName);
         setState(() {
           _resting = true;
           _isTransitioning = true;
@@ -191,6 +230,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
         _timeLeft = ex.duration;
       }
     });
+    // Audio: Announce new set
+    final ex = _exercises[_currentExercise];
+    _audioCoaching.speakExerciseStart(ex.exerciseId, ex.exerciseName);
     _startTimer();
   }
 
@@ -205,6 +247,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
         }
         _resting = false;
       });
+      // Audio: Announce new exercise
+      final ex = _exercises[_currentExercise];
+      _audioCoaching.speakExerciseStart(ex.exerciseId, ex.exerciseName);
       _startTimer();
     } else {
       _completeWorkout();
@@ -214,6 +259,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
   Future<void> _completeWorkout() async {
     _timer?.cancel();
     setState(() => _completed = true);
+    // Audio: Congratulations!
+    _audioCoaching.speakExerciseStart('', 'Selamat! Latihan selesai. Kerja bagus hari ini!');
 
     final auth = context.read<AuthProvider>();
     final firestore = FirestoreService();
@@ -238,6 +285,20 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
 
   void _togglePause() {
     setState(() => _paused = !_paused);
+  }
+
+  /// Toggle audio coaching ON/OFF - Requirements: 4.2, 4.5
+  void _toggleAudioCoaching() {
+    setState(() {
+      _audioEnabled = !_audioEnabled;
+    });
+    _audioCoaching.toggleEnabled();
+  }
+
+  Future<void> _playDoubleBurstHaptic() async {
+    await HapticFeedback.heavyImpact();
+    await Future.delayed(const Duration(milliseconds: 150));
+    await HapticFeedback.heavyImpact();
   }
 
   @override
@@ -273,14 +334,15 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
                 borderRadius: BorderRadius.circular(AppDimensions.radiusXl),
                 image: DecorationImage(
                   image: NetworkImage(
-                    widget.workout?.thumbnailUrl != null && widget.workout!.thumbnailUrl.isNotEmpty
+                    widget.workout?.thumbnailUrl != null &&
+                            widget.workout!.thumbnailUrl.isNotEmpty
                         ? widget.workout!.thumbnailUrl
-                        : 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=2070&auto=format&fit=crop'
+                        : 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=2070&auto=format&fit=crop',
                   ),
                   fit: BoxFit.cover,
                   colorFilter: ColorFilter.mode(
-                    Colors.black.withValues(alpha: 0.6), 
-                    BlendMode.darken
+                    Colors.black.withValues(alpha: 0.6),
+                    BlendMode.darken,
                   ),
                 ),
               ),
@@ -302,7 +364,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
                       ),
                       const SizedBox(width: 8),
                       _buildHeaderChip(
-                        widget.workout?.category == 'fat_loss' ? 'Fat Loss' : 'Muscle',
+                        widget.workout?.category == 'fat_loss'
+                            ? 'Fat Loss'
+                            : 'Muscle',
                         Colors.white.withValues(alpha: 0.2),
                       ),
                     ],
@@ -324,16 +388,24 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(AppDimensions.radiusLg),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.lightbulb_outline_rounded, color: AppColors.primary),
+                    const Icon(
+                      Icons.lightbulb_outline_rounded,
+                      color: AppColors.primary,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'Tips: Fokus pada teknik gerakan yang benar daripada kecepatan.',
-                        style: AppTextStyles.bodySmall(color: AppColors.primary, fontWeight: FontWeight.bold),
+                        style: AppTextStyles.bodySmall(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
@@ -344,30 +416,41 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
             Text(
               'Daftar Gerakan',
               style: AppTextStyles.h5(
-                color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                color: isDark
+                    ? AppColors.textPrimaryDark
+                    : AppColors.textPrimaryLight,
               ),
             ),
             const SizedBox(height: AppDimensions.lg),
             Expanded(
               child: ListView.separated(
                 itemCount: _exercises.length,
-                separatorBuilder: (_, __) => const SizedBox(height: AppDimensions.sm),
+                separatorBuilder: (_, __) =>
+                    const SizedBox(height: AppDimensions.sm),
                 itemBuilder: (context, index) {
                   final ex = _exercises[index];
                   return GestureDetector(
                     onTap: () {
                       Navigator.pushNamed(
-                        context, 
-                        '/exercises/detail', 
+                        context,
+                        '/exercises/detail',
                         arguments: ex.exerciseId,
                       );
                     },
                     child: Container(
                       padding: const EdgeInsets.all(AppDimensions.lg),
                       decoration: BoxDecoration(
-                        color: isDark ? AppColors.darkCard : AppColors.lightCard,
-                        borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
-                        border: Border.all(color: isDark ? AppColors.darkElevated : AppColors.lightElevated),
+                        color: isDark
+                            ? AppColors.darkCard
+                            : AppColors.lightCard,
+                        borderRadius: BorderRadius.circular(
+                          AppDimensions.radiusMd,
+                        ),
+                        border: Border.all(
+                          color: isDark
+                              ? AppColors.darkElevated
+                              : AppColors.lightElevated,
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -379,7 +462,11 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Center(
-                              child: Icon(Icons.fitness_center_rounded, size: 22, color: AppColors.primary),
+                              child: Icon(
+                                Icons.fitness_center_rounded,
+                                size: 22,
+                                color: AppColors.primary,
+                              ),
                             ),
                           ),
                           const SizedBox(width: AppDimensions.md),
@@ -390,7 +477,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
                                 Text(
                                   ex.exerciseName,
                                   style: AppTextStyles.labelMedium(
-                                    color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                                    color: isDark
+                                        ? AppColors.textPrimaryDark
+                                        : AppColors.textPrimaryLight,
                                   ),
                                 ),
                                 Text(
@@ -398,13 +487,19 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
                                       ? '${ex.sets} set × ${ex.reps > 2 ? ex.reps - 2 : ex.reps}-${ex.reps} Reps'
                                       : '${ex.sets} set × ${ex.duration} Detik',
                                   style: AppTextStyles.bodySmall(
-                                    color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                                    color: isDark
+                                        ? AppColors.textSecondaryDark
+                                        : AppColors.textSecondaryLight,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.primary),
+                          const Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 14,
+                            color: AppColors.primary,
+                          ),
                         ],
                       ),
                     ),
@@ -436,7 +531,10 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
       ),
       child: Text(
         text,
-        style: AppTextStyles.caption(color: Colors.white, fontWeight: FontWeight.bold),
+        style: AppTextStyles.caption(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
@@ -468,12 +566,22 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  IconButton(
-                    onPressed: () {
-                      _timer?.cancel();
-                      Navigator.pop(context);
-                    },
-                    icon: const Icon(Icons.close_rounded),
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: () {
+                          _timer?.cancel();
+                          Navigator.pop(context);
+                        },
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                      IconButton(
+                        onPressed: _toggleAudioCoaching,
+                        icon: Icon(
+                          _audioEnabled ? Icons.volume_up : Icons.volume_off,
+                        ),
+                      ),
+                    ],
                   ),
                   Text(
                     'Gerakan ${_currentExercise + 1}/${_exercises.length}',
@@ -487,12 +595,16 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
                     children: [
                       Text(
                         '${(_totalElapsed / 60 * (widget.workout?.category == 'fat_loss' ? 12 : 8.5)).toStringAsFixed(1)} kcal',
-                        style: AppTextStyles.labelMedium(color: AppColors.error),
+                        style: AppTextStyles.labelMedium(
+                          color: AppColors.error,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Text(
                         '${(_totalElapsed ~/ 60).toString().padLeft(2, '0')}:${(_totalElapsed % 60).toString().padLeft(2, '0')}',
-                        style: AppTextStyles.labelMedium(color: AppColors.primary),
+                        style: AppTextStyles.labelMedium(
+                          color: AppColors.primary,
+                        ),
                       ),
                     ],
                   ),
@@ -541,10 +653,16 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
                           icon: const Icon(Icons.add_rounded, size: 18),
                           label: const Text('15 Detik'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: isDark ? AppColors.darkCard : AppColors.lightCard,
-                            foregroundColor: isDark ? Colors.white : Colors.black,
+                            backgroundColor: isDark
+                                ? AppColors.darkCard
+                                : AppColors.lightCard,
+                            foregroundColor: isDark
+                                ? Colors.white
+                                : Colors.black,
                             elevation: 0,
-                            side: BorderSide(color: isDark ? Colors.white24 : Colors.black12),
+                            side: BorderSide(
+                              color: isDark ? Colors.white24 : Colors.black12,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -552,7 +670,10 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen>
                           onPressed: () {
                             setState(() => _restTime = 0);
                           },
-                          icon: const Icon(Icons.fast_forward_rounded, size: 18),
+                          icon: const Icon(
+                            Icons.fast_forward_rounded,
+                            size: 18,
+                          ),
                           label: const Text('Lewati ⏩'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,

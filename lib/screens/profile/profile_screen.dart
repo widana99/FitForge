@@ -195,6 +195,7 @@ class ProfileScreen extends StatelessWidget {
                           ),
                           TextButton(
                             onPressed: () async {
+                              Navigator.pop(ctx);
                               await auth.signOut();
                               if (context.mounted) {
                                 Navigator.pushNamedAndRemoveUntil(

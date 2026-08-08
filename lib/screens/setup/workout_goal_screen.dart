@@ -49,7 +49,7 @@ class _WorkoutGoalScreenState extends State<WorkoutGoalScreen> {
         'workoutGoal': _selectedGoal,
       });
       if (mounted) {
-        Navigator.pushNamed(context, AppRoutes.trainingLevel);
+        Navigator.pushNamed(context, AppRoutes.fitnessTest);
       }
     }
   }

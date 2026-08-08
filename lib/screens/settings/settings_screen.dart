@@ -4,6 +4,7 @@ import '../../config/theme/app_colors.dart';
 import '../../config/theme/app_text_styles.dart';
 import '../../config/theme/app_dimensions.dart';
 import '../../config/routes/app_routes.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -71,8 +72,13 @@ class SettingsScreen extends StatelessWidget {
             SizedBox(
               width: double.infinity, height: AppDimensions.buttonLg,
               child: OutlinedButton.icon(
-                onPressed: () => Navigator.pushNamedAndRemoveUntil(
-                  context, AppRoutes.login, (r) => false),
+                onPressed: () async {
+                  final auth = context.read<AuthProvider>();
+                  await auth.signOut();
+                  if (context.mounted) {
+                    Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (r) => false);
+                  }
+                },
                 icon: const Icon(Icons.logout_rounded, color: AppColors.error),
                 label: const Text('Keluar', style: TextStyle(color: AppColors.error)),
                 style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.error)),
