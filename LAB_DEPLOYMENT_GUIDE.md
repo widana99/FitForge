@@ -8,9 +8,10 @@ Panduan ini disusun secara terperinci agar aplikasi **FitForge** (Flutter Mobile
 1. [Arsitektur & Konsep Bebas Error](#1-arsitektur--konsep-bebas-error)
 2. [Langkah 1: Persiapan di Laptop Sendiri (Export ke Flashdisk)](#2-langkah-1-persiapan-di-laptop-sendiri-export-ke-flashdisk)
 3. [Langkah 2: Menjalankan di Komputer Lab Kampus (1-Klik)](#3-langkah-2-menjalankan-di-komputer-lab-kampus-1-klik)
-4. [Langkah 3: Pengujian Aplikasi (Web & Smartphone Fisik)](#4-langkah-3-pengujian-aplikasi-web--smartphone-fisik)
-5. [Langkah 4: Pembersihan Setelah Demo/Presentasi Selesai](#5-langkah-4-pembersihan-setelah-demopresentasi-selesai)
-6. [Troubleshooting Panduan Solusi Semua Error Khas Komputer Lab](#6-troubleshooting-panduan-solusi-semua-error-khas-komputer-lab)
+4. [Alternatif Tanpa Flashdisk (Google Drive, GitHub, Docker Hub)](#4-alternatif-tanpa-flashdisk-google-drive-github-docker-hub)
+5. [Langkah 3: Pengujian Aplikasi (Web & Smartphone Fisik)](#5-langkah-3-pengujian-aplikasi-web--smartphone-fisik)
+6. [Langkah 4: Pembersihan Setelah Demo/Presentasi Selesai](#6-langkah-4-pembersihan-setelah-demopresentasi-selesai)
+7. [Troubleshooting Panduan Solusi Semua Error Khas Komputer Lab](#7-troubleshooting-panduan-solusi-semua-error-khas-komputer-lab)
 
 ---
 
@@ -96,7 +97,68 @@ Saat Anda berada di lab komputer kampus:
 
 ---
 
-## 4. Langkah 3: Pengujian Aplikasi (Web & Smartphone Fisik)
+## 4. Alternatif Tanpa Flashdisk (Google Drive, GitHub, Docker Hub)
+
+Jika kampus Anda **melarang penggunaan Flashdisk USB** (misalnya port USB dikunci oleh admin lab demi keamanan dan pencegahan virus), gunakan salah satu dari 3 cara legal dan aman berikut:
+
+### Opsi A: Menggunakan Cloud Storage Kampus (Google Drive / OneDrive) - *Paling Mudah*
+1. Di laptop Anda, jalankan `export-lab-bundle.bat` seperti biasa hingga folder `dist-lab` terbentuk.
+2. Kompres/Zip folder `dist-lab` menjadi file `dist-lab.zip`.
+3. Upload `dist-lab.zip` ke akun **Google Drive** atau **OneDrive** kampus Anda.
+4. Di komputer lab:
+   - Buka browser lab, login ke Google Drive / OneDrive Anda.
+   - Download `dist-lab.zip` ke folder `Downloads` atau `Desktop` komputer lab.
+   - Klik kanan -> *Extract All* (Ekstrak Semua).
+   - Masuk ke folder hasil ekstrak, lalu klik dua kali **`run-in-lab.bat`**.
+   *(Semua image tetap di-load secara lokal dari file tarball tanpa butuh internet saat proses Docker berjalan).*
+
+---
+
+### Opsi B: Menggunakan Docker Hub / Container Registry - *Standar Industri DevOps*
+Anda dapat mengunggah image ke Docker Hub (gratis) dari laptop Anda, sehingga di lab komputer hanya perlu menarik (*pull*) image tersebut:
+1. Di laptop Anda, beri tag pada image dan upload ke Docker Hub:
+   ```cmd
+   docker tag fitforge-web:latest <username-dockerhub>/fitforge-web:latest
+   docker tag fitforge-admin:latest <username-dockerhub>/fitforge-admin:latest
+   docker push <username-dockerhub>/fitforge-web:latest
+   docker push <username-dockerhub>/fitforge-admin:latest
+   ```
+2. Di komputer lab:
+   - Anda hanya butuh satu file `docker-compose.yml` (bisa diketik / disalin dari pesan WA Web, GitHub Gist, atau email).
+   - Ubah baris `image:` menjadi `<username-dockerhub>/fitforge-web:latest` dan `<username-dockerhub>/fitforge-admin:latest`.
+   - Jalankan terminal lab: `docker compose up -d`.
+   - Docker akan langsung mendownload image yang sudah jadi via koneksi HTTPS resmi Docker Hub (yang umumnya diizinkan oleh jaringan kampus).
+
+---
+
+### Opsi C: Menggunakan Git Repository (GitHub / GitLab)
+Jika komputer lab mengizinkan `git`:
+1. Push kedua proyek ke repositori GitHub Anda:
+   ```bash
+   git push origin feature/docker-lab-deployment
+   ```
+2. Di komputer lab, buka Command Prompt / PowerShell:
+   ```cmd
+   git clone <URL_REPO_GITHUB_ANDA>
+   cd fitforge
+   docker compose -f docker-compose.lab.yml up --build -d
+   ```
+   Docker di komputer lab akan otomatis mem-build seluruh source code dan menjalankan kedua container.
+
+---
+
+### Opsi D: Tampilkan Langsung dari Laptop via Hotspot / Local IP (Tanpa Sentuh Komputer Lab)
+Jika Anda membawa laptop ke lab dan komputer lab terhubung ke jaringan Wi-Fi yang sama (atau tersambung ke Hotspot HP Anda):
+1. Di laptop Anda, jalankan container: `docker compose -f docker-compose.lab.yml up -d`.
+2. Cek IP lokal laptop Anda di Command Prompt: `ipconfig` (misalnya: `192.168.1.50`).
+3. Di browser komputer lab kampus, Anda dan dosen cukup membuka:
+   - FitForge User Web: `http://192.168.1.50:8080`
+   - FitForge Admin Dashboard: `http://192.168.1.50:3000`
+   *(Cara ini 100% aman, tidak perlu install atau memindahkan file apapun ke komputer lab).*
+
+---
+
+## 5. Langkah 3: Pengujian Aplikasi (Web & Smartphone Fisik)
 
 Setelah skrip berjalan, kedua aplikasi dapat diakses secara langsung:
 
