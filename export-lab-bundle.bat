@@ -88,17 +88,24 @@ echo       timeout: 5s
 echo       retries: 3
 ) > dist-lab\docker-compose.yml
 
+echo [6/6] Mengompresi folder dist-lab menjadi 'dist-lab.zip' untuk Google Drive / OneDrive...
+powershell -Command "if (Test-Path 'dist-lab.zip') { Remove-Item 'dist-lab.zip' -Force }; Compress-Archive -Path 'dist-lab\*' -DestinationPath 'dist-lab.zip' -CompressionLevel Optimal"
+if exist "dist-lab.zip" (
+    echo [OK] Arsip 'dist-lab.zip' siap diunggah ke Google Drive!
+)
+
 echo.
 echo ========================================================
-echo   [SUKSES] Lab Bundle Siap Digunakan!
+echo   [SUKSES] Paket Lab Siap Digunakan!
 echo ========================================================
-echo Seluruh berkas siap dipindahkan ke Flashdisk ada di folder:
-echo   %CD%\dist-lab\
+echo Berkas siap pakai:
+echo   - Folder : %CD%\dist-lab\
+echo   - ZIP    : %CD%\dist-lab.zip  <-- (Upload file ini ke Google Drive!)
 echo.
-echo Langkah selanjutnya:
-echo   1. Copy folder 'dist-lab' ke USB Flashdisk Anda.
-echo   2. Di komputer Lab Kampus, colok Flashdisk, buka folder 'dist-lab'.
-echo   3. Klik dua kali 'run-in-lab.bat' (tanpa butuh download internet lab!).
+echo Alur Eksekusi di Lab:
+echo   1. PLAN A (Utama): Download 'dist-lab.zip' dari Google Drive lab, ekstrak, klik 'run-in-lab.bat'.
+echo   2. PLAN B (Cadangan 1): Jalankan 'push-to-dockerhub.bat' di rumah, di lab cukup pull image.
+echo   3. PLAN C (Cadangan 2): Git clone di lab, jalankan 'docker compose -f docker-compose.lab.yml up --build -d'.
 echo ========================================================
 echo.
 pause

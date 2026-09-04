@@ -97,64 +97,116 @@ Saat Anda berada di lab komputer kampus:
 
 ---
 
-## 4. Alternatif Tanpa Flashdisk (Google Drive, GitHub, Docker Hub)
+---
 
-Jika kampus Anda **melarang penggunaan Flashdisk USB** (misalnya port USB dikunci oleh admin lab demi keamanan dan pencegahan virus), gunakan salah satu dari 3 cara legal dan aman berikut:
+## 4. Alternatif Tanpa Flashdisk: Strategi 3 Lapis (Plan A, Plan B, Plan C)
 
-### Opsi A: Menggunakan Cloud Storage Kampus (Google Drive / OneDrive) - *Paling Mudah*
-1. Di laptop Anda, jalankan `export-lab-bundle.bat` seperti biasa hingga folder `dist-lab` terbentuk.
-2. Kompres/Zip folder `dist-lab` menjadi file `dist-lab.zip`.
-3. Upload `dist-lab.zip` ke akun **Google Drive** atau **OneDrive** kampus Anda.
-4. Di komputer lab:
-   - Buka browser lab, login ke Google Drive / OneDrive Anda.
-   - Download `dist-lab.zip` ke folder `Downloads` atau `Desktop` komputer lab.
-   - Klik kanan -> *Extract All* (Ekstrak Semua).
-   - Masuk ke folder hasil ekstrak, lalu klik dua kali **`run-in-lab.bat`**.
-   *(Semua image tetap di-load secara lokal dari file tarball tanpa butuh internet saat proses Docker berjalan).*
+Jika kampus Anda **melarang penggunaan Flashdisk USB** (karena port USB dinonaktifkan oleh administrator lab demi keamanan), kami telah menyiapkan **3 Lapis Rencana (Multi-Tier Plan)** agar presentasi Anda 100% aman dan tidak gagal:
+
+```
+[PLAN A: Google Drive ZIP Bundle]  <-- UTAMA (Paling cepat, offline runtime)
+         │ (jika Google Drive diblokir/gagal)
+         ▼
+[PLAN B: Docker Hub Image Pull]    <-- CADANGAN 1 (Tarik image via HTTPS resmi)
+         │ (jika Docker Hub lambat/dibatasi)
+         ▼
+[PLAN C: Git Clone & Auto-Build]   <-- CADANGAN 2 (Build langsung dari source di lab)
+         │ (jika internet lab down total)
+         ▼
+[PLAN D: Direct Hotspot / Local IP]<-- CADANGAN DARURAT (Laptop -> Browser Lab)
+```
 
 ---
 
-### Opsi B: Menggunakan Docker Hub / Container Registry - *Standar Industri DevOps*
-Anda dapat mengunggah image ke Docker Hub (gratis) dari laptop Anda, sehingga di lab komputer hanya perlu menarik (*pull*) image tersebut:
-1. Di laptop Anda, beri tag pada image dan upload ke Docker Hub:
+### 🟢 PLAN A (Utama): Google Drive / OneDrive ZIP Bundle
+*Metode ini direkomendasikan karena paling cepat dan tidak memerlukan download dependensi saat proses Docker berjalan di lab.*
+
+1. **Di Laptop Anda:**
+   - Jalankan file `export-lab-bundle.bat`.
+   - Skrip sekarang **otomatis membuat file `dist-lab.zip`** di folder proyek Anda.
+   - Buka Google Drive / OneDrive akun kampus Anda via browser di laptop, lalu unggah file `dist-lab.zip`.
+2. **Di Komputer Lab Kampus:**
+   - Buka browser lab $\rightarrow$ login ke Google Drive / OneDrive Anda.
+   - Download file `dist-lab.zip` ke folder `Downloads` atau `Desktop`.
+   - Klik kanan file `dist-lab.zip` $\rightarrow$ pilih **Extract All** (Ekstrak Semua).
+   - Buka folder hasil ekstrak, lalu klik dua kali:
+     ```text
+     run-in-lab.bat
+     ```
+   - *Selesai!* Aplikasi langsung terbuka di browser lab tanpa memakan kuota internet lab.
+
+---
+
+### 🟡 PLAN B (Cadangan 1): Docker Hub Image Pull
+*Gunakan ini jika Google Drive diblokir atau komputer lab tidak mengizinkan download file .zip.*
+
+1. **Di Laptop Anda (Sebelum ke Kampus):**
+   - Pastikan Anda memiliki akun gratis di [hub.docker.com](https://hub.docker.com/).
+   - Klik dua kali skrip:
+     ```text
+     push-to-dockerhub.bat
+     ```
+   - Masukkan username Docker Hub Anda dan password/token saat diminta. Skrip akan otomatis mengunggah kedua image:
+     - `<username>/fitforge-web:latest`
+     - `<username>/fitforge-admin:latest`
+2. **Di Komputer Lab Kampus:**
+   - Buka Command Prompt / PowerShell di komputer lab, buat folder baru:
+     ```cmd
+     mkdir C:\fitforge-demo
+     cd C:\fitforge-demo
+     ```
+   - Buat file `docker-compose.yml` (bisa di-copy dari email / WA Web / Notepad):
+     ```yaml
+     services:
+       fitforge-web:
+         image: <username>/fitforge-web:latest
+         ports:
+           - "8080:80"
+       fitforge-admin:
+         image: <username>/fitforge-admin:latest
+         ports:
+           - "3000:3000"
+     ```
+   - Jalankan perintah:
+     ```cmd
+     docker compose up -d
+     ```
+   - Buka browser lab ke `http://localhost:8080` dan `http://localhost:3000`.
+
+---
+
+### 🟠 PLAN C (Cadangan 2): Git Clone & Build Langsung di Lab
+*Gunakan ini jika image registry diblokir, namun akses GitHub/Git diizinkan di lab.*
+
+1. **Di Laptop Anda:**
+   - Pastikan branch proyek sudah dipush ke GitHub:
+     ```bash
+     git push origin feature/docker-lab-deployment
+     ```
+2. **Di Komputer Lab Kampus:**
+   - Buka Command Prompt di lab:
+     ```cmd
+     git clone <URL_REPO_GITHUB_ANDA>
+     cd fitforge
+     build-from-git.bat
+     ```
+   - Skrip `build-from-git.bat` akan mem-build kedua container dari source code dan otomatis membuka browser saat selesai.
+
+---
+
+### 🔴 PLAN D (Cadangan Darurat): Direct Hotspot / Local IP
+*Gunakan ini jika komputer lab benar-benar terkunci (tidak bisa install apapun), namun Anda membawa laptop.*
+
+1. Hubungkan laptop Anda dan komputer lab ke Wi-Fi yang sama (atau sambungkan komputer lab ke Hotspot HP Anda).
+2. Di laptop Anda, jalankan container:
    ```cmd
-   docker tag fitforge-web:latest <username-dockerhub>/fitforge-web:latest
-   docker tag fitforge-admin:latest <username-dockerhub>/fitforge-admin:latest
-   docker push <username-dockerhub>/fitforge-web:latest
-   docker push <username-dockerhub>/fitforge-admin:latest
+   docker compose -f docker-compose.lab.yml up -d
    ```
-2. Di komputer lab:
-   - Anda hanya butuh satu file `docker-compose.yml` (bisa diketik / disalin dari pesan WA Web, GitHub Gist, atau email).
-   - Ubah baris `image:` menjadi `<username-dockerhub>/fitforge-web:latest` dan `<username-dockerhub>/fitforge-admin:latest`.
-   - Jalankan terminal lab: `docker compose up -d`.
-   - Docker akan langsung mendownload image yang sudah jadi via koneksi HTTPS resmi Docker Hub (yang umumnya diizinkan oleh jaringan kampus).
-
----
-
-### Opsi C: Menggunakan Git Repository (GitHub / GitLab)
-Jika komputer lab mengizinkan `git`:
-1. Push kedua proyek ke repositori GitHub Anda:
-   ```bash
-   git push origin feature/docker-lab-deployment
-   ```
-2. Di komputer lab, buka Command Prompt / PowerShell:
-   ```cmd
-   git clone <URL_REPO_GITHUB_ANDA>
-   cd fitforge
-   docker compose -f docker-compose.lab.yml up --build -d
-   ```
-   Docker di komputer lab akan otomatis mem-build seluruh source code dan menjalankan kedua container.
-
----
-
-### Opsi D: Tampilkan Langsung dari Laptop via Hotspot / Local IP (Tanpa Sentuh Komputer Lab)
-Jika Anda membawa laptop ke lab dan komputer lab terhubung ke jaringan Wi-Fi yang sama (atau tersambung ke Hotspot HP Anda):
-1. Di laptop Anda, jalankan container: `docker compose -f docker-compose.lab.yml up -d`.
-2. Cek IP lokal laptop Anda di Command Prompt: `ipconfig` (misalnya: `192.168.1.50`).
-3. Di browser komputer lab kampus, Anda dan dosen cukup membuka:
-   - FitForge User Web: `http://192.168.1.50:8080`
-   - FitForge Admin Dashboard: `http://192.168.1.50:3000`
-   *(Cara ini 100% aman, tidak perlu install atau memindahkan file apapun ke komputer lab).*
+3. Cek IP lokal laptop Anda di CMD laptop: `ipconfig` (misalnya muncul `192.168.1.45`).
+4. Di browser komputer lab, buka:
+   - **`http://192.168.1.45:8080`** (FitForge Web)
+   - **`http://192.168.1.45:3000`** (FitForge Admin)
+   *Aplikasi berjalan mulus di layar komputer lab tanpa menyentuh sistem lab sama sekali!*
 
 ---
 
