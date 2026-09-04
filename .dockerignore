@@ -1,0 +1,32 @@
+# Docker Ignore for FitForge Flutter App
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Android build cache
+android/.gradle/
+android/app/build/
+android/local.properties
+
+# Version control and IDE files
+.git/
+.gitignore
+.idea/
+.vscode/
+.kiro/
+.qodo/
+*.iml
+*.drawio
+*.drawio.bkp
+
+# Temporary and local scratch files
+scratch/
+docs/
+Dockerfile
+docker-compose*.yml
+dist-lab/
+*.tar
