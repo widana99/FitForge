@@ -14,28 +14,41 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: 2. Masukkan username Docker Hub (default otomatis: ginoputrawidana)
+:: 2. Username Docker Hub
 set DOCKERHUB_USER=ginoputrawidana
 set /p USER_INPUT="Masukkan Username Docker Hub [%DOCKERHUB_USER%]: "
 if not "!USER_INPUT!"=="" set DOCKERHUB_USER=!USER_INPUT!
 
 echo.
 echo [1/4] Login ke Docker Hub sebagai '!DOCKERHUB_USER!'...
-echo (Jika diminta password, PASTE Personal Access Token Anda, lalu tekan Enter):
-docker login -u !DOCKERHUB_USER!
-if %errorlevel% neq 0 (
+echo Anda bisa memasukkan PASSWORD AKUN Docker Hub Anda ATAU Personal Access Token.
+echo.
+set /p DOCKER_PASS="Password atau Access Token: "
+
+if "!DOCKER_PASS!"=="" (
     echo.
-    echo [ERROR] Login gagal. Pastikan username dan Personal Access Token benar.
+    echo [ERROR] Password / Token tidak boleh kosong!
     pause
     exit /b 1
 )
 
 echo.
-echo [2/4] Membangun (Build) Docker Images FitForge Web & Admin...
+echo Sedang memverifikasi login ke Docker Hub...
+set "ENV_PASS=!DOCKER_PASS!"
+powershell -Command "$p = $env:ENV_PASS.Trim(); $p | docker login -u %DOCKERHUB_USER% --password-stdin"
+if %errorlevel% neq 0 (
+    echo.
+    echo [ERROR] Login gagal. Pastikan password atau token yang dimasukkan benar.
+    pause
+    exit /b 1
+)
+
+echo.
+echo [2/4] Memeriksa Docker Images FitForge Web & Admin...
 docker compose -f docker-compose.lab.yml build
 if %errorlevel% neq 0 (
     echo.
-    echo [ERROR] Build image gagal. Periksa pesan error di atas.
+    echo [ERROR] Build image gagal.
     pause
     exit /b 1
 )
@@ -46,7 +59,8 @@ docker tag fitforge-web:latest !DOCKERHUB_USER!/fitforge-web:latest
 docker tag fitforge-admin:latest !DOCKERHUB_USER!/fitforge-admin:latest
 
 echo.
-echo [4/4] Mengunggah (Push) ke Docker Hub (harap tunggu proses upload)...
+echo [4/4] Mengunggah (Push) ke Docker Hub...
+echo Mengunggah fitforge-web:latest...
 docker push !DOCKERHUB_USER!/fitforge-web:latest
 if %errorlevel% neq 0 (
     echo.
@@ -55,6 +69,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+echo Mengunggah fitforge-admin:latest...
 docker push !DOCKERHUB_USER!/fitforge-admin:latest
 if %errorlevel% neq 0 (
     echo.
